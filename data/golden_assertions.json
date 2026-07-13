@@ -1,0 +1,137 @@
+{
+ "_comment": "Gold-set regression alarms: these domain/field pairs were hand-verified against vendor docs and must never be null again. qa.py fires CRITICAL if one regresses. Grow this list as the gold-100 audit proceeds.",
+ "assertions": [
+  {
+   "domain": "stripe.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "stripe.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "stripe.com",
+   "field": "openapi_spec_url"
+  },
+  {
+   "domain": "github.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "github.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "github.com",
+   "field": "openapi_spec_url"
+  },
+  {
+   "domain": "pinecone.io",
+   "field": "auth_type"
+  },
+  {
+   "domain": "pinecone.io",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "pinecone.io",
+   "field": "free_tier"
+  },
+  {
+   "domain": "agify.io",
+   "field": "auth_type"
+  },
+  {
+   "domain": "agify.io",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "agify.io",
+   "field": "free_tier"
+  },
+  {
+   "domain": "twilio.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "twilio.com",
+   "field": "openapi_spec_url"
+  },
+  {
+   "domain": "slack.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "slack.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "slack.com",
+   "field": "openapi_spec_url"
+  },
+  {
+   "domain": "notion.so",
+   "field": "auth_type"
+  },
+  {
+   "domain": "notion.so",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "zoom.us",
+   "field": "auth_type"
+  },
+  {
+   "domain": "zoom.us",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "openai.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "openai.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "anthropic.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "anthropic.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "cloudflare.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "cloudflare.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "supabase.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "okta.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "okta.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "deepgram.com",
+   "field": "auth_type"
+  },
+  {
+   "domain": "deepgram.com",
+   "field": "rate_limits"
+  },
+  {
+   "domain": "cohere.com",
+   "field": "auth_type"
+  }
+ ]
+}

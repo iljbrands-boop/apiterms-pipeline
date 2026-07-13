@@ -1,0 +1,235 @@
+{
+ "_comment": "Gold-set targeted sources: hand-picked doc URLs per domain, fetched by ingest/gold_crawl.py on top of (or replacing) the generic crawl. Only URLs that return 200 with real content get into pages.json.",
+ "stripe.com": [
+  "https://docs.stripe.com/api/authentication",
+  "https://docs.stripe.com/keys",
+  "https://docs.stripe.com/rate-limits",
+  "https://docs.stripe.com/api",
+  "https://github.com/stripe/openapi"
+ ],
+ "github.com": [
+  "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+  "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api",
+  "https://docs.github.com/en/rest/about-the-rest-api/about-the-rest-api",
+  "https://github.com/github/rest-api-description"
+ ],
+ "openai.com": [
+  "https://platform.openai.com/docs/pricing"
+ ],
+ "anthropic.com": [
+  "https://docs.anthropic.com/en/api/overview",
+  "https://docs.anthropic.com/en/api/rate-limits",
+  "https://www.anthropic.com/pricing"
+ ],
+ "cloudflare.com": [
+  "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
+  "https://developers.cloudflare.com/fundamentals/api/reference/limits/",
+  "https://developers.cloudflare.com/api/",
+  "https://github.com/cloudflare/api-schemas"
+ ],
+ "shopify.com": [
+  "https://shopify.dev/docs/api/admin-rest",
+  "https://shopify.dev/docs/api/usage/authentication",
+  "https://shopify.dev/docs/api/usage/rate-limits"
+ ],
+ "paypal.com": [
+  "https://developer.paypal.com/api/rest/",
+  "https://developer.paypal.com/api/rest/authentication/",
+  "https://developer.paypal.com/reference/guidelines/rate-limiting/"
+ ],
+ "squareup.com": [
+  "https://developer.squareup.com/docs/build-basics/general-considerations/rate-limits"
+ ],
+ "hubspot.com": [
+  "https://developers.hubspot.com/docs/api/usage-details",
+  "https://developers.hubspot.com/docs/api/overview"
+ ],
+ "algolia.com": [
+  "https://www.algolia.com/doc/rest-api/search/",
+  "https://www.algolia.com/doc/guides/security/api-keys/",
+  "https://www.algolia.com/pricing/"
+ ],
+ "supabase.com": [
+  "https://supabase.com/docs/guides/api",
+  "https://supabase.com/pricing",
+  "https://supabase.com/docs/guides/api/securing-your-api"
+ ],
+ "openweathermap.org": [
+  "https://openweathermap.org/current",
+  "https://openweathermap.org/full-price",
+  "https://home.openweathermap.org/questions"
+ ],
+ "twilio.com": [
+  "https://www.twilio.com/docs/usage/api",
+  "https://www.twilio.com/docs/usage/security",
+  "https://www.twilio.com/docs/usage/requests-to-twilio",
+  "https://www.twilio.com/en-us/pricing",
+  "https://github.com/twilio/twilio-oai"
+ ],
+ "slack.com": [
+  "https://api.slack.com/authentication",
+  "https://api.slack.com/apis/rate-limits",
+  "https://api.slack.com/web",
+  "https://github.com/slackapi/slack-api-specs"
+ ],
+ "sendgrid.com": [
+  "https://www.twilio.com/docs/sendgrid/api-reference",
+  "https://www.twilio.com/docs/sendgrid/v3-api/how-to-use-the-sendgrid-v3-api",
+  "https://sendgrid.com/en-us/pricing",
+  "https://github.com/sendgrid/sendgrid-oai"
+ ],
+ "notion.so": [
+  "https://developers.notion.com/reference/intro",
+  "https://developers.notion.com/reference/authentication",
+  "https://developers.notion.com/reference/request-limits",
+  "https://www.notion.com/pricing"
+ ],
+ "discord.com": [
+  "https://discord.com/developers/docs/reference",
+  "https://discord.com/developers/docs/topics/rate-limits",
+  "https://discord.com/developers/docs/topics/oauth2",
+  "https://github.com/discord/discord-api-spec"
+ ],
+ "spotify.com": [
+  "https://developer.spotify.com/documentation/web-api",
+  "https://developer.spotify.com/documentation/web-api/concepts/rate-limits",
+  "https://developer.spotify.com/documentation/web-api/concepts/authorization"
+ ],
+ "airtable.com": [
+  "https://airtable.com/developers/web/api/introduction",
+  "https://airtable.com/developers/web/api/rate-limits",
+  "https://airtable.com/developers/web/api/authentication",
+  "https://airtable.com/pricing"
+ ],
+ "dropbox.com": [
+  "https://www.dropbox.com/developers/documentation/http/documentation",
+  "https://developers.dropbox.com/oauth-guide",
+  "https://www.dropbox.com/developers/reference/data-transport-limit"
+ ],
+ "zoom.us": [
+  "https://developers.zoom.us/docs/api/",
+  "https://developers.zoom.us/docs/api/rest/rate-limits/",
+  "https://developers.zoom.us/docs/integrations/oauth/",
+  "https://zoom.us/pricing"
+ ],
+ "pinecone.io": [
+  "https://docs.pinecone.io/reference/api/authentication",
+  "https://docs.pinecone.io/reference/api/database-limits",
+  "https://docs.pinecone.io/reference/quotas-and-limits",
+  "https://docs.pinecone.io/reference/api/introduction",
+  "https://www.pinecone.io/pricing/",
+  "https://github.com/pinecone-io/pinecone-openapi"
+ ],
+ "firecrawl.dev": [
+  "https://docs.firecrawl.dev/llms.txt",
+  "https://docs.firecrawl.dev/api-reference/introduction",
+  "https://www.firecrawl.dev/pricing"
+ ],
+ "neon.tech": [
+  "https://neon.com/pricing",
+  "https://neon.com/docs/reference/api-reference",
+  "https://neon.com/docs/introduction",
+  "https://neon.com/docs/manage/api-keys"
+ ],
+ "perplexity.ai": [
+  "https://docs.perplexity.ai/llms.txt",
+  "https://docs.perplexity.ai/getting-started/overview",
+  "https://docs.perplexity.ai/guides/pricing",
+  "https://docs.perplexity.ai/getting-started/quickstart"
+ ],
+ "mux.com": [
+  "https://www.mux.com/pricing",
+  "https://docs.mux.com/api-reference",
+  "https://docs.mux.com/core/make-api-requests"
+ ],
+ "voyageai.com": [
+  "https://docs.voyageai.com/docs/introduction",
+  "https://docs.voyageai.com/docs/pricing",
+  "https://docs.voyageai.com/docs/api-key-and-installation"
+ ],
+ "assemblyai.com": [
+  "https://www.assemblyai.com/docs/api-reference/overview",
+  "https://www.assemblyai.com/pricing",
+  "https://www.assemblyai.com/docs"
+ ],
+ "courier.com": [
+  "https://www.courier.com/pricing",
+  "https://www.courier.com/docs/reference",
+  "https://www.courier.com/docs/reference/authorization"
+ ],
+ "descope.com": [
+  "https://docs.descope.com/api",
+  "https://www.descope.com/pricing",
+  "https://docs.descope.com/api/openapi"
+ ],
+ "trychroma.com": [
+  "https://docs.trychroma.com/docs/overview/introduction",
+  "https://docs.trychroma.com/cloud/pricing",
+  "https://docs.trychroma.com/cloud/getting-started"
+ ],
+ "livekit.io": [
+  "https://docs.livekit.io/reference/",
+  "https://livekit.io/pricing",
+  "https://docs.livekit.io/home/cloud/authentication/"
+ ],
+ "mixpanel.com": [
+  "https://developer.mixpanel.com/reference/overview",
+  "https://mixpanel.com/pricing",
+  "https://developer.mixpanel.com/reference/authentication"
+ ],
+ "tinybird.co": [
+  "https://www.tinybird.co/docs/api-reference",
+  "https://www.tinybird.co/pricing",
+  "https://www.tinybird.co/docs/api-reference/overview"
+ ],
+ "bunny.net": [
+  "https://bunny.net/pricing/",
+  "https://docs.bunny.net/reference/bunnynet-api-overview",
+  "https://docs.bunny.net/reference/getting-started"
+ ],
+ "llamaindex.ai": [
+  "https://docs.cloud.llamaindex.ai/API/llama-platform",
+  "https://docs.llamaindex.ai/en/stable/",
+  "https://cloud.llamaindex.ai/pricing"
+ ],
+ "clerk.com": [
+  "https://clerk.com/docs/reference/backend-api",
+  "https://clerk.com/pricing"
+ ],
+ "mistral.ai": [
+  "https://mistral.ai/pricing"
+ ],
+ "sentry.io": [
+  "https://docs.sentry.io/api/auth/",
+  "https://docs.sentry.io/api/",
+  "https://sentry.io/pricing/"
+ ],
+ "fly.io": [
+  "https://fly.io/docs/security/tokens/",
+  "https://fly.io/docs/machines/api/",
+  "https://fly.io/docs/about/pricing/"
+ ],
+ "render.com": [
+  "https://api-docs.render.com/reference/introduction",
+  "https://render.com/docs/api",
+  "https://render.com/pricing"
+ ],
+ "datadoghq.com": [
+  "https://docs.datadoghq.com/api/latest/authentication/",
+  "https://docs.datadoghq.com/api/latest/rate-limits/",
+  "https://www.datadoghq.com/pricing/"
+ ],
+ "segment.com": [
+  "https://docs.segmentapis.com/tag/Getting-Started",
+  "https://segment.com/pricing/"
+ ],
+ "okta.com": [
+  "https://developer.okta.com/docs/api/",
+  "https://developer.okta.com/docs/reference/rate-limits/",
+  "https://developer.okta.com/docs/reference/rl-additional-limits/"
+ ],
+ "deepgram.com": [
+  "https://developers.deepgram.com/reference/api-rate-limits",
+  "https://deepgram.com/pricing"
+ ]
+}

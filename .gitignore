@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+# working intermediates (regenerable) — never the committed sample or seed list
+data/census.jsonl
+data/seed.jsonl
+data/seed_classified.jsonl
+data/extract_queue.jsonl
+data/pages/
+data/fill_usage.jsonl
+data/changelog.jsonl
+data/needs_reextraction.txt
+data/census_prev.jsonl
+data/_head_census.jsonl
+site/dist/
+site/config.json
+formspree.json
+.netlify/
