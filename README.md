@@ -1,7 +1,7 @@
 # API Terms — the open pipeline
 
-**Current, source-linked access terms for every public API — auth, pricing, free tier,
-rate limits, OpenAPI spec, MCP server etc — one structured record each, with an evidence URL
+**Current, source-linked access terms for every public API (auth, pricing, free tier,
+rate limits, OpenAPI spec, MCP server etc) one structured record each, with an evidence URL
 on every field.** This is the open-source pipeline behind **[apiterms.com](https://apiterms.com)**.
 
 The open API directory, [apis.guru](https://apis.guru), froze in April 2023 and
