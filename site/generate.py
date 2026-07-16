@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S4 pSEO generator — census.jsonl -> static site (housingfeed pattern: rmtree +
+"""Static site generator — census.jsonl -> a self-contained static site (rmtree +
 rebuild + publish threshold). Zero deps, stdlib only.
 
   python3 site/generate.py [--base https://domain.tld]
@@ -15,7 +15,7 @@ Publish threshold: >=4 of the 8 term fields non-null (thin/null-heavy pages hurt
 trust AND SEO). Every page: per-field evidence links, last_verified, honest nulls,
 correction link, JSON-LD schema.org/WebAPI, answer-engine summary sentence.
 Category is always normalized to a canonical bucket — the generator NEVER drops a
-record for an empty bucket (housingfeed gotcha).
+record just because its raw category bucket is empty.
 
 Sponsor layer (2026-07-12): site/sponsors.json drives paid placement —
   {"categories": {"<cat-slug>": {"name","url","tagline"}}, "featured": ["<domain>"]}
@@ -40,8 +40,8 @@ DIST = ROOT / "site" / "dist"
 BASELINE_LABEL = "July 2026"
 SIG_LABEL = {"pricing": "Pricing", "limits": "Rate limits", "auth": "Auth",
              "spec": "OpenAPI spec", "mcp": "MCP server", "info": "Details"}
-# Every record gets a page (the site IS the dataset; "not documented" is data —
-# Iron directive 2026-07-12). Records under this many filled fields are rendered
+# Every record gets a page (the site IS the dataset; "not documented" is data).
+# Records under this many filled fields are rendered
 # with <meta name=robots noindex> and kept out of the sitemap so thin pages can't
 # hurt the domain's search quality; humans and agents still get every record.
 INDEX_MIN_FIELDS = 4
@@ -51,8 +51,8 @@ FIELD_LABELS = {"base_url": "Base URL", "auth_type": "Auth", "free_tier": "Free 
                 "pricing_model": "Pricing model", "pricing_details": "Pricing",
                 "rate_limits": "Rate limits", "openapi_spec_url": "OpenAPI spec",
                 "mcp_server": "MCP server"}
-# No email addresses anywhere on the site (Iron directive 2026-07-12): corrections,
-# claims and sponsor contact all go through Formspree forms (/correct/, /sponsors/).
+# No email addresses anywhere on the site: corrections, claims and sponsor contact
+# all go through Formspree forms (/correct/, /sponsors/).
 SPONSORS = ROOT / "site" / "sponsors.json"
 
 
@@ -155,7 +155,7 @@ def filled(rec) -> int:
     return sum(1 for f in FIELDS if v(rec, f) is not None)
 
 
-# Curated, indexable collection pages (review §7: curated facets, never combinatorial)
+# Curated, indexable collection pages (curated facets, never combinatorial)
 COLLECTIONS = [
     ("free-apis", "Free APIs", "a documented free tier",
      lambda r: v(r, "free_tier")),
@@ -338,7 +338,7 @@ def page(title, desc, canonical, body_html, base, jsonld=None, noindex=False):
 {body_html}
 <footer>
 PUBLIC API TERMS, STRUCTURED AND FRESH — AUTH · PRICING · RATE LIMITS · SPEC · MCP<br>
-Per-field evidence URLs, verified monthly. apis.guru froze in 2023 — rebuilt for agents.<br>
+Per-field evidence URLs, re-verified on a schedule. apis.guru froze in 2023 — rebuilt for agents.<br>
 <a href="/methodology/">Methodology</a> · <a href="/add/">Add an API</a> · <a href="/changes/">Changes</a> · <a href="/correct/">Corrections</a> · <a href="/dataset/">Dataset</a> · <a href="/sponsors/">Become a sponsor</a> · <a href="/llms.txt">llms.txt</a>
 </footer>
 </div>
@@ -467,7 +467,7 @@ def record_page(rec, base, history=None):
     <h3>Why trust this</h3>
     <ul>
       <li><span class="ck">▸</span><span>Every field links to <b>the exact page that states it</b>.</span></li>
-      <li><span class="ck">▸</span><span>Re-checked monthly — last verified <b>{escape(rec.get('last_verified') or '')}</b>.</span></li>
+      <li><span class="ck">▸</span><span>Re-checked on a schedule — last verified <b>{escape(rec.get('last_verified') or '')}</b>.</span></li>
       <li><span class="ck">▸</span><span>Honest nulls: <b>"not documented" is data</b>, never a guess.</span></li>
     </ul>
     <a class="btn" href="/correct/?domain={escape(dom)}&amp;kind=correction">Suggest a correction</a>
@@ -577,7 +577,7 @@ def index_page(recs, cats, base, corpus_stats, changelog=None):
                   f'<span class="sep">·</span><a href="/changes/">change feed →</a></div>')
     title = "API Terms — auth, pricing & rate limits for every public API"
     desc = (f"{n} public APIs as structured data: auth type, pricing, free tier, rate limits, "
-            "OpenAPI spec, MCP server. A source URL on every field, re-verified monthly.")
+            "OpenAPI spec, MCP server. A source URL on every field, re-verified on a schedule.")
     cat_links = "\n".join(
         f'<a class="chip cat" href="/category/{slugify(c)}/">{escape(c)} · {len(rs)}</a>'
         for c, rs in cats)
@@ -595,7 +595,7 @@ def index_page(recs, cats, base, corpus_stats, changelog=None):
 </div>"""
     body = f"""
 <div style="padding:44px 0 6px">
-  <div class="kicker">Machine-readable · re-verified monthly</div>
+  <div class="kicker">Machine-readable · re-verified on a schedule</div>
   <h1 style="font-size:clamp(24px,3.6vw,34px);line-height:1.25;margin:0 0 14px;max-width:24em">
     The terms of {n:,} public APIs. One record each. Every verified claim sourced.</h1>
   <p class="sub" style="font-size:16px">Auth type, pricing, free tier, rate limits, OpenAPI spec, MCP server —
@@ -731,7 +731,7 @@ the change feed (what changed, when, with proof), history, and commercial licens
       to <b>apiterms.com</b>.</span></li>
       <li><span class="ck">▸</span><span>Redistribution, resale, model training or bundling:
       <b>licensed separately</b> — <a href="/correct/">contact us</a>.</span></li>
-      <li><span class="ck">▸</span><span>Re-verified on a monthly cycle; see
+      <li><span class="ck">▸</span><span>Re-verified on a published schedule; see
       <a href="/methodology/">methodology</a>.</span></li>
     </ul>
     <a class="btn" href="/correct/">License the data / change feed</a>
@@ -895,7 +895,7 @@ if(q.get("kind"))document.getElementById("f-kind").value=q.get("kind");
 def add_page(base):
     """Suggest-an-API page. Contributors expand COVERAGE (a domain to cover); they never
     write field values — the pipeline crawls, extracts with evidence, and QA-gates it, so
-    the evidence-or-null guarantee (the moat) holds even for community submissions."""
+    the evidence-or-null guarantee holds even for community submissions."""
     url = f"{base}/add/"
     title = "Add an API to the census — API Terms"
     desc = ("Missing an API you use? Tell us the domain — we crawl it, extract the terms "
@@ -941,7 +941,7 @@ you expand what we track, never the values themselves.</p>
 
 def report_page(recs, base):
     """State of the API Economy — data story computed live from the corpus, so every
-    figure updates as the census grows (proof-engine ethos: never a stale number)."""
+    figure updates as the census grows (never a stale number)."""
     import collections
     url = f"{base}/report/"
     n = len(recs)
@@ -1226,9 +1226,9 @@ the current limitations are.</p>
   <div class="panel card">
     <h3>Verification &amp; QA</h3>
     <ul>
-      <li><span class="ck">▸</span><span><b>Re-verification is scheduled</b> (currently monthly;
-      the cadence stated on each record is the one that applies to it). Source pages are
-      re-fetched and diffed; changed sources trigger re-extraction.</span></li>
+      <li><span class="ck">▸</span><span><b>Re-verification is scheduled</b> — the cadence stated
+      on each record is the one that applies to it. Source pages are re-fetched and diffed;
+      changed sources trigger re-extraction.</span></li>
       <li><span class="ck">▸</span><span><b>{funnel['assertions']} golden assertions</b> guard
       hand-audited records (Stripe, GitHub, OpenAI, Slack…): any build in which one of those
       verified fields regresses to null <b>fails and cannot deploy</b>.</span></li>
@@ -1442,7 +1442,7 @@ def main():
     lt = ["# API Terms", "",
           "> Auth, pricing, free tiers, rate limits, specs and MCP servers for every "
           "public API — one structured record each, a source URL on every field, "
-          "re-verified monthly.", "",
+          "re-verified on a schedule.", "",
           f"- [Directory]({base}/): all published records",
           f"- [Change feed]({base}/changes/): what changed in API terms ([RSS]({base}/changes.xml))",
           f"- [Add an API]({base}/add/): suggest an API to cover — we crawl and verify it",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S1: build the seed census candidate list from the two free instant sources.
+"""Build the seed census candidate list from the two free instant sources.
 
 Sources:
   1. apis.guru list.json   — 2.5k providers with OpenAPI specs (frozen 2023, but the
@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "seed.jsonl"
-UA = "apicensus-seed/0.1 (+https://apiterms.com)"
+UA = "apiterms-seed/0.1 (+https://apiterms.com)"
 
 # rough public-suffix handling: enough for dedupe keys, not for display
 _SECOND_LEVEL = {"co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go"}

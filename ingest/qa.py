@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """QA gate for the extraction output — run on every fill batch before publish.
 
-Accuracy is the trust moat (CLAUDE.md): one wrong pricing claim on a pSEO page kills
-the product. This validates data/census.jsonl structurally, flags records for human
-review, and prints a 5% manual-review sample.
+Accuracy is the trust moat: one wrong pricing claim on a public page kills the product.
+This validates data/census.jsonl structurally, flags records for human review, and prints
+a 5% manual-review sample.
 
   python3 ingest/qa.py [path]      # default data/census.jsonl
 

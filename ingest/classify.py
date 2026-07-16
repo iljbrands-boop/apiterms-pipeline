@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S1 classify pass: probe every seed domain for liveness + machine-readable surfaces.
+"""Classify pass: probe every seed domain for liveness + machine-readable surfaces.
 
 Per domain (max 4 cheap requests, honest UA, 10s timeout, full TLS verification —
 a broken cert counts as not-alive, which is honest census data):
@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SEED = ROOT / "data" / "seed.jsonl"
 OUT = ROOT / "data" / "seed_classified.jsonl"
-UA = "apicensus-probe/0.1 (+https://apiterms.com)"
+UA = "apiterms-probe/0.1 (+https://apiterms.com)"
 
 
 def get(url: str):

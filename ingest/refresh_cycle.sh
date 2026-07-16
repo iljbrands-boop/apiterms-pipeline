@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Weekly freshness ritual — freshness layer 2 (FRESHNESS_SPEC.md).
+# Weekly freshness ritual — freshness layer 2.
 # The committed census.jsonl (git HEAD) is the baseline; this cycle re-verifies against
 # the source, refills what changed, and diffs it into the change ledger.
 #

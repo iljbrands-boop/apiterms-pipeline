@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
-"""Manually add high-value domains the seed lists missed (gold-audit coverage gap,
-2026-07-13). Probes llms.txt + /openapi.json like classify.py, appends to
-seed_classified.jsonl + extract_queue.jsonl (source: "manual"), skips existing.
-Zero deps. Usage: add_domains.py  (edit ADDITIONS below)
+"""Populate the extraction queue from the coverage list.
+
+Reads the domains in data/seed_domains.txt (the coverage manifest and the PR target —
+see CONTRIBUTING.md), probes each for llms.txt + /openapi.json like classify.py, and
+appends any not-yet-queued domain to seed_classified.jsonl + extract_queue.jsonl. This
+is what turns "PR a domain into seed_domains.txt" into a crawlable queue entry — and it
+creates extract_queue.jsonl on the first run.
+
+  python3 ingest/add_domains.py [N]     # N = cap how many new domains to probe (default: all)
+
+The ADDITIONS map below carries optional seed hints (name / description / category) for
+known domains; every hint is re-derived from evidence at fill time, so a domain that only
+appears in seed_domains.txt (no hint) is queued just the same. Zero deps.
 """
+import concurrent.futures as cf
 import json
+import sys
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SEED_DOMAINS = ROOT / "data" / "seed_domains.txt"
 CLASSIFIED = ROOT / "data" / "seed_classified.jsonl"
 QUEUE = ROOT / "data" / "extract_queue.jsonl"
 
-# Modern-stack additions (2026-07-13): the APIs a funded startup / HN reader actually
-# integrates, which the apis.guru + public-apis seed lists missed. 91 domains diffed
-# against the existing queue. Names/descs/categories are seed hints only — fill
-# re-derives what_it_does + category from evidence. The original coverage-gap 10
-# (openai, anthropic, cloudflare, shopify, paypal, squareup, hubspot, algolia,
-# supabase, openweathermap) are already queued; add_domains skips existing.
+# Optional seed hints for known modern-stack domains — the APIs a funded startup / HN
+# reader actually integrates, which the apis.guru + public-apis seed lists missed.
+# Names/descs/categories are hints only — fill re-derives what_it_does + category from
+# evidence, so domains present in seed_domains.txt without a hint here are queued too.
 ADDITIONS = [
     # --- AI / LLM providers ---
     ("cohere.com", "Cohere API", "Enterprise LLMs: generation, embeddings, rerank, classify", "Machine Learning"),
@@ -126,9 +136,12 @@ ADDITIONS = [
 ]
 
 
+HINTS = {dom: (name, desc, cat) for dom, name, desc, cat in ADDITIONS}
+
+
 def probe(url, timeout=10):
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "apiterms-census/1.0 (+https://apiterms.com)"})
+        req = urllib.request.Request(url, headers={"User-Agent": "apiterms-crawler/0.1 (+https://apiterms.com)"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             if r.status == 200 and len(r.read(2048)) > 100:
                 return url
@@ -137,28 +150,50 @@ def probe(url, timeout=10):
     return None
 
 
+def classify_domain(dom: str) -> dict:
+    name, desc, cat = HINTS.get(dom, (None, None, None))
+    return {
+        "domain": dom, "name": name, "description": desc, "category": cat,
+        "auth_hint": None, "spec_url": None, "spec_count": 0,
+        "sources": ["seed_domains"], "alive": True,
+        "llms_txt": probe(f"https://{dom}/llms.txt"),
+        "openapi_probe": probe(f"https://{dom}/openapi.json"),
+        "queue_rank": 9999,
+    }
+
+
+def read_seed_domains() -> list:
+    """Domains from seed_domains.txt plus any hint-only domains, order-preserving + deduped."""
+    seen, out = set(), []
+    lines = SEED_DOMAINS.read_text().splitlines() if SEED_DOMAINS.exists() else []
+    for dom in [l.strip() for l in lines] + list(HINTS):
+        if dom and not dom.startswith("#") and dom not in seen:
+            seen.add(dom)
+            out.append(dom)
+    return out
+
+
 def main():
-    have = {json.loads(l)["domain"] for l in QUEUE.open()}
+    limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    # extract_queue.jsonl may not exist yet on a fresh checkout — this script is what
+    # first creates it (via the append-mode writes below).
+    have = {json.loads(l)["domain"] for l in QUEUE.open()} if QUEUE.exists() else set()
+    todo = [d for d in read_seed_domains() if d not in have]
+    if limit is not None:
+        todo = todo[:limit]
+    print(f"probing {len(todo)} new domain(s) from {SEED_DOMAINS.name} (skipping {len(have)} already queued)")
+
     added = 0
-    for dom, name, desc, cat in ADDITIONS:
-        if dom in have:
-            print(f"{dom}: already queued, skip")
-            continue
-        rec = {
-            "domain": dom, "name": name, "description": desc, "category": cat,
-            "auth_hint": None, "spec_url": None, "spec_count": 0,
-            "sources": ["manual"], "alive": True,
-            "llms_txt": probe(f"https://{dom}/llms.txt"),
-            "openapi_probe": probe(f"https://{dom}/openapi.json"),
-            "queue_rank": 9999,
-        }
-        with CLASSIFIED.open("a") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        with QUEUE.open("a") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        print(f"{dom}: added (llms.txt={'yes' if rec['llms_txt'] else 'no'})")
-        added += 1
-    print(f"done: {added} added")
+    with CLASSIFIED.open("a") as cf_out, QUEUE.open("a") as q_out, \
+            cf.ThreadPoolExecutor(max_workers=12) as ex:
+        for rec in ex.map(classify_domain, todo):
+            line = json.dumps(rec, ensure_ascii=False) + "\n"
+            cf_out.write(line)
+            q_out.write(line)
+            added += 1
+            if added % 50 == 0:
+                print(f"  {added}/{len(todo)}", flush=True)
+    print(f"done: {added} added -> {QUEUE.name}")
 
 
 if __name__ == "__main__":

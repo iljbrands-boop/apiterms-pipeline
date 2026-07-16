@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Freshness layer 2 — the value-diff engine (FRESHNESS_SPEC.md).
+"""Freshness layer 2 — the value-diff engine.
 
 Layer 1 (refresh.py) answers "did this source page change." This answers the question
 that is actually the product: "did the TERMS change, and to what." It diffs two census
 snapshots — the record values before a refill vs. after — and appends structured,
-evidenced change events to data/changelog.jsonl. That ledger is the moat: apis.guru died
-of invisible staleness; nobody else keeps snapshots of API terms, so nobody else can
-produce this event stream.
+evidenced change events to data/changelog.jsonl. That ledger is what apis.guru never had:
+apis.guru died of invisible staleness; keeping snapshots of API terms is what makes this
+event stream possible.
 
   python3 ingest/changelog.py diff <before.jsonl> <after.jsonl>
         append value-change events for every field that changed between the two snapshots
@@ -19,7 +19,7 @@ Event shape (data/changelog.jsonl, append-only):
   kind: added (null->value) | removed (value->null) | changed (value->value)
   significance: pricing | limits | auth | spec | mcp | info   (derived from field)
 
-Jitter control (spec §6): values are normalized (case/whitespace/trailing punctuation)
+Jitter control: values are normalized (case/whitespace/trailing punctuation)
 before comparison, so an identical fact re-phrased by the extractor does not emit an event.
 Only records that passed a page-change check (layer 1) should be refilled, so free-text
 churn is already bounded; the qa.py sample is the final guard before anything publishes.

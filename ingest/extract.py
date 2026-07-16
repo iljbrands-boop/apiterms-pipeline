@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""S2-S3 extraction: crawl docs/pricing pages per API domain, then LLM-fill the
-census schema with per-field evidence URLs.
+"""Extraction: crawl docs/pricing pages per API domain, then LLM-fill the census
+schema with per-field evidence URLs.
 
 Two phases, runnable separately:
   python3 ingest/extract.py crawl [N]     -> fetch candidate pages for the first N
@@ -8,7 +8,7 @@ Two phases, runnable separately:
   python3 ingest/extract.py fill [N]      -> LLM-fill census records for the first N
                                              crawled-but-unfilled domains -> data/census.jsonl
 
-Conventions (CLAUDE.md): stdlib only, polite crawling (honest UA, ~1 req/s/domain,
+Conventions: stdlib only, polite crawling (honest UA, ~1 req/s/domain,
 no anti-bot circumvention), per-field evidence URLs, publish nulls honestly.
 
 The fill phase calls the Anthropic Messages API directly over HTTPS (stdlib urllib —
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 QUEUE = ROOT / "data" / "extract_queue.jsonl"
 PAGES = ROOT / "data" / "pages"
 CENSUS = ROOT / "data" / "census.jsonl"
-UA = "apicensus-crawler/0.1 (+https://apiterms.com)"
+UA = "apiterms-crawler/0.1 (+https://apiterms.com)"
 MODEL = os.environ.get("CENSUS_MODEL", "claude-opus-4-8")
 MAX_PAGES_PER_DOMAIN = 6
 MAX_TEXT_PER_PAGE = 20_000  # chars of stripped text kept per page

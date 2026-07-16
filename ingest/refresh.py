@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The snapshot clock — freshness layer 1 (no API key needed).
 
-apis.guru died of staleness; freshness is the product (CLAUDE.md). This is the cheap,
-key-free half of the monthly freshness loop: re-fetch each published record's evidence
+apis.guru died of staleness; freshness is the product. This is the cheap,
+key-free half of the scheduled freshness loop: re-fetch each published record's evidence
 pages, compare against the crawl snapshot they were extracted from, and emit change
 candidates. Only records whose *source pages actually changed* need the expensive LLM
 re-extraction — this is what keeps the re-fill bill small AND powers the change feed.
@@ -107,7 +107,7 @@ def check_record(rec: dict) -> dict:
 def main():
     if not CENSUS.exists():
         sys.exit(f"{CENSUS} not found — nothing published to refresh yet. "
-                 "Run `extract.py fill` first; this becomes the monthly job once records exist.")
+                 "Run `extract.py fill` first; this becomes the scheduled job once records exist.")
     recs = [json.loads(l) for l in CENSUS.open()]
     if not recs:
         sys.exit("census.jsonl is empty — nothing to refresh.")

@@ -10,15 +10,21 @@ the whole API economy — and the data agents and integrators actually need (how
 what does it cost, what are the limits) has never existed as data. This is the pipeline that
 compiles it, and keeps it current.
 
-> **One finding from the corpus:** across ~1,340 public APIs, **2.25× more ship a documented
-> MCP server than expose an OpenAPI spec URL** (16.3% vs 7.2%). The tooling is organized
-> around the spec; the APIs have moved to the agent interface.
+> **One finding from the full corpus:** more public APIs now ship a **documented MCP server**
+> than expose an **OpenAPI spec URL** — **2.25× as many** (16.3% vs 7.2%). The tooling
+> ecosystem is still organized around the spec; the APIs have moved to the agent interface.
 
 ## What's in this repo
 
 The **pipeline is fully open** — every line of code that turns a vendor's docs page into a
 verified record. A **250-record sample** ([`data/sample.jsonl`](data/sample.jsonl)) and the
-full **coverage list** ([`data/seed_domains.txt`](data/seed_domains.txt)) are here too.
+full **coverage list** of 1,340 domains ([`data/seed_domains.txt`](data/seed_domains.txt))
+are here too.
+
+> The shipped sample is a **quality-filtered slice** (high/medium-confidence records only), so
+> its field-fill rates run higher than the full-corpus figures above — in the sample, ~35% ship
+> an MCP server and ~26% a spec. The MCP-over-OpenAPI direction holds in both; the exact
+> corpus-wide percentages come from the full dataset, not this sample.
 
 The **full live dataset** (all records + the change history that powers the
 [change feed](https://apiterms.com/changes/)) lives at apiterms.com — see
@@ -27,7 +33,7 @@ The **full live dataset** (all records + the change history that powers the
 ```
 ingest/seed_pull.py     seed registries (apis.guru + public-apis) -> data/seed.jsonl
 ingest/classify.py      liveness + llms.txt + openapi.json probes -> extraction queue
-ingest/add_domains.py   hand-add high-value domains (the PR target: data/seed_domains.txt)
+ingest/add_domains.py   read data/seed_domains.txt (the PR target) -> extraction queue
 ingest/extract.py       crawl: fetch candidate docs pages | fill: LLM + strict schema + evidence
 ingest/qa.py            QA gate: rejects fabricated evidence, checks golden assertions
 ingest/refresh.py       layer 1 — re-fetch source pages, detect changes ($0, no API key)
@@ -52,14 +58,31 @@ Zero-dependency **stdlib Python only**. Flat JSONL files, no database, no framew
 
 ## Quickstart
 
+No dependencies to install — **Python 3.9+ stdlib only**, no API key, no network.
+
 ```bash
-# no dependencies to install — stdlib Python 3.9+ only
-python3 ingest/classify.py          # probe seed domains for liveness + machine-readable surfaces
-python3 ingest/extract.py crawl 50  # fetch docs pages for the first 50 queued domains ($0)
-ANTHROPIC_API_KEY=... python3 ingest/extract.py fill 50   # extract records with evidence
-python3 ingest/qa.py                # gate the batch (must exit 0)
-python3 site/generate.py --base https://example.com       # build the static site
+# Build the entire site from the 250-record sample, and pass the QA gate:
+cp data/sample.jsonl data/census.jsonl               # the sample becomes your working DB
+python3 ingest/qa.py                                 # QA gate — exits 0, 0 criticals
+python3 site/generate.py --base https://example.com  # -> site/dist/ (record, category, change-feed pages)
 ```
+
+That's the whole thing running on a fresh clone. To run the **full pipeline from scratch**
+(the last step needs an Anthropic API key):
+
+```bash
+python3 ingest/seed_pull.py                # fetch seed registries (apis.guru + public-apis) -> data/seed.jsonl
+python3 ingest/classify.py                 # probe liveness + llms.txt + openapi.json -> data/seed_classified.jsonl
+python3 ingest/add_domains.py              # populate the extraction queue with curated high-value domains
+python3 ingest/extract.py crawl 50         # fetch docs pages for the first 50 queued domains ($0)
+ANTHROPIC_API_KEY=... python3 ingest/extract.py fill 50   # extract records with per-field evidence
+python3 ingest/qa.py                        # gate the batch (must exit 0)
+python3 site/generate.py --base https://example.com
+```
+
+`add_domains.py` is what seeds `data/extract_queue.jsonl` (the list of domains to crawl,
+and the PR target — see [CONTRIBUTING.md](CONTRIBUTING.md)); edit its `ADDITIONS` list to
+point the crawler at whatever you want to cover.
 
 The `fill` step calls the Anthropic Messages API directly over stdlib `urllib` (no SDK), with
 structured outputs and a hard rule that every value must cite one of the exact pages it was
