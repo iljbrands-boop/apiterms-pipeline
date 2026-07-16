@@ -1,4 +1,4 @@
-# API Terms: tracking the pricing, auth, and rate limits of public APIs
+# API Terms -- tracking the pricing, auth, and rate limits of public APIs
 
 Every public API documents its authentication, pricing, free tier, and rate limits. But that information lives on pages built for humans, and vendors change those pages without notice more often than you would like.
 
