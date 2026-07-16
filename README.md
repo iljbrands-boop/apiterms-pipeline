@@ -1,9 +1,7 @@
 # API Terms — tracking the pricing, auth, and rate limits of public APIs
 
-Every public API tells you how to auth, what it costs, what's free, and where the rate
-limits are — but only in docs pages written for humans, and those pages change whenever
-the vendor feels like it, silently. This pipeline turns those pages into structured
-records (auth type, pricing, free tier, rate limits, OpenAPI spec, MCP server — with a
+Every public API documents its authentication, pricing, free tier, and rate limits. But only on pages built for humans, which vendors can change without notice. (and they do...). 
+This pipeline turns those pages into structured records (auth type, pricing, free tier, rate limits, OpenAPI spec, MCP server — with a
 source link on every field), then keeps going back: re-checking every record against its
 source and logging every change. It's the open-source machinery behind
 **[apiterms.com](https://apiterms.com)** and its [change feed](https://apiterms.com/changes/).
