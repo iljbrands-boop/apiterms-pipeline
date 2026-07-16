@@ -1,13 +1,13 @@
 # API Terms — the open pipeline
 
 **Current, source-linked access terms for every public API — auth, pricing, free tier,
-rate limits, OpenAPI spec, MCP server — one structured record each, with an evidence URL
+rate limits, OpenAPI spec, MCP server etc — one structured record each, with an evidence URL
 on every field.** This is the open-source pipeline behind **[apiterms.com](https://apiterms.com)**.
 
-The incumbent open API directory, [apis.guru](https://apis.guru), froze in April 2023 and
+The open API directory, [apis.guru](https://apis.guru), froze in April 2023 and
 only ever tracked OpenAPI specs. But the spec is the *rarest* machine-readable artifact in
 the whole API economy — and the data agents and integrators actually need (how do I auth,
-what does it cost, what are the limits) has never existed as data. This is the pipeline that
+what does it cost, what are the limits etc..) has never existed as data. This is the pipeline that
 compiles it, and keeps it current.
 
 > **One finding from the full corpus:** more public APIs now ship a **documented MCP server**
