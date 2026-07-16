@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the seed census candidate list from the two free instant sources.
+"""S1: build the seed census candidate list from the two free instant sources.
 
 Sources:
   1. apis.guru list.json   — 2.5k providers with OpenAPI specs (frozen 2023, but the

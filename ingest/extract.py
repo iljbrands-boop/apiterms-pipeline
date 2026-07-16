@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Extraction: crawl docs/pricing pages per API domain, then LLM-fill the census
-schema with per-field evidence URLs.
+"""Extraction: crawl docs/pricing pages per API domain, then LLM-fill the
+census schema with per-field evidence URLs.
 
 Two phases, runnable separately:
   python3 ingest/extract.py crawl [N]     -> fetch candidate pages for the first N

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static site generator — census.jsonl -> a self-contained static site (rmtree +
+"""pSEO generator — census.jsonl -> static site (rmtree +
 rebuild + publish threshold). Zero deps, stdlib only.
 
   python3 site/generate.py [--base https://domain.tld]
@@ -15,7 +15,7 @@ Publish threshold: >=4 of the 8 term fields non-null (thin/null-heavy pages hurt
 trust AND SEO). Every page: per-field evidence links, last_verified, honest nulls,
 correction link, JSON-LD schema.org/WebAPI, answer-engine summary sentence.
 Category is always normalized to a canonical bucket — the generator NEVER drops a
-record just because its raw category bucket is empty.
+record for an empty bucket.
 
 Sponsor layer (2026-07-12): site/sponsors.json drives paid placement —
   {"categories": {"<cat-slug>": {"name","url","tagline"}}, "featured": ["<domain>"]}
@@ -40,8 +40,8 @@ DIST = ROOT / "site" / "dist"
 BASELINE_LABEL = "July 2026"
 SIG_LABEL = {"pricing": "Pricing", "limits": "Rate limits", "auth": "Auth",
              "spec": "OpenAPI spec", "mcp": "MCP server", "info": "Details"}
-# Every record gets a page (the site IS the dataset; "not documented" is data).
-# Records under this many filled fields are rendered
+# Every record gets a page (the site IS the dataset; "not documented" is data —
+# site policy). Records under this many filled fields are rendered
 # with <meta name=robots noindex> and kept out of the sitemap so thin pages can't
 # hurt the domain's search quality; humans and agents still get every record.
 INDEX_MIN_FIELDS = 4
@@ -51,8 +51,8 @@ FIELD_LABELS = {"base_url": "Base URL", "auth_type": "Auth", "free_tier": "Free 
                 "pricing_model": "Pricing model", "pricing_details": "Pricing",
                 "rate_limits": "Rate limits", "openapi_spec_url": "OpenAPI spec",
                 "mcp_server": "MCP server"}
-# No email addresses anywhere on the site: corrections, claims and sponsor contact
-# all go through Formspree forms (/correct/, /sponsors/).
+# No email addresses anywhere on the site (site policy): corrections,
+# claims and sponsor contact all go through Formspree forms (/correct/, /sponsors/).
 SPONSORS = ROOT / "site" / "sponsors.json"
 
 
@@ -73,6 +73,22 @@ CONFIG_PATH = ROOT / "site" / "config.json"
 CONFIG = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
 CRISP_ID = CONFIG.get("crisp_website_id", "")
 FORMSPREE_PROJECT = CONFIG.get("formspree_project_id", "")
+
+# Booking link for licensing / sponsor / partnership conversations. Swap in your own
+# booking URL. Surfaced in the footer and on /dataset/ + /sponsors/ only —
+# where a human conversation actually makes sense — never on record pages.
+CAL_LINK = "https://cal.com/apiterms"
+
+# Homepage social proof. IMPORTANT: these are PLACEHOLDERS — obviously-fake
+# names/companies so nothing here can be mistaken for a real endorsement. The trust
+# brand forbids fabricated quotes on the live site. Replace with REAL, permissioned
+# quotes before shipping publicly; DO NOT SHIP PLACEHOLDERS PUBLICLY. When the list is
+# empty the whole testimonials section renders nothing (safe to deploy with no fakes).
+#   -> Go live: paste real entries below. Hide the section entirely: set TESTIMONIALS = []
+# Empty = section is hidden (nothing renders). Paste REAL, permissioned quotes to go live.
+# Format (one dict per quote):
+#   {"quote": "...", "name": "Real Name", "role": "Title", "company": "Company"},
+TESTIMONIALS = []  # hidden until a quote earns its place (removed 2026-07-16 — added no value)
 
 
 def form_action(key):
@@ -155,7 +171,7 @@ def filled(rec) -> int:
     return sum(1 for f in FIELDS if v(rec, f) is not None)
 
 
-# Curated, indexable collection pages (curated facets, never combinatorial)
+# Curated, indexable collection pages (review §7: curated facets, never combinatorial)
 COLLECTIONS = [
     ("free-apis", "Free APIs", "a documented free tier",
      lambda r: v(r, "free_tier")),
@@ -184,14 +200,14 @@ def logo(dom: str, big=False) -> str:
 # ---------------------------------------------------------------- templates
 
 CSS = """
-:root{--void:#04060b;--panel:#0a101a;--panel2:#0d1420;--line:#16202e;--lineh:#233145;
---ink:#e8edf5;--body:#9fadbf;--dim:#5c6b7f;--ghost:#39465a;--blue:#1f5eff;--bluehot:#4d82ff;
---bluedim:#12275c;--add:#00e08b;--adddim:rgba(0,224,139,.12);--warn:#ffb454;
+:root{--void:#f7f8fa;--panel:#ffffff;--panel2:#fbfcfd;--line:#eaedf2;--lineh:#dce0e7;
+--ink:#0c1424;--body:#4a5568;--dim:#8b95a3;--ghost:#aab2be;--blue:#1f5eff;--bluehot:#1a53d8;
+--bluedim:#d7e3ff;--add:#00a368;--adddim:rgba(0,163,104,.10);--warn:#b8760a;
+--shadow:0 1px 2px rgba(12,20,36,.04),0 4px 14px rgba(12,20,36,.05);
 --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 *{box-sizing:border-box}
-body{margin:0;background:repeating-linear-gradient(0deg,transparent 0 47px,rgba(35,49,69,.16) 47px 48px),
-repeating-linear-gradient(90deg,transparent 0 47px,rgba(35,49,69,.16) 47px 48px),var(--void);
+body{margin:0;background:var(--void);
 color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
 a{color:var(--bluehot);text-decoration:none}a:hover{text-decoration:underline}
 ::selection{background:var(--blue);color:#fff}
@@ -202,9 +218,11 @@ a{color:var(--bluehot);text-decoration:none}a:hover{text-decoration:underline}
 .brand .mark{color:#fff;background:var(--blue);padding:4px 8px;font-size:11.5px}
 .topnav{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
 .topnav a{color:var(--body)}
+.topnav a.nav-add{color:var(--add);border:1px solid var(--adddim);padding:2px 8px;border-radius:2px}
+.topnav a.nav-add:hover{background:var(--adddim);text-decoration:none}
 .crumbs{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin:20px 0;letter-spacing:.04em;text-transform:uppercase}
 .crumbs a{color:var(--dim)}.crumbs span{color:var(--ghost);margin:0 8px}
-.panel{background:var(--panel);border:1px solid var(--lineh)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 h1{font-family:var(--mono);font-weight:700;letter-spacing:-.01em}
 .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--bluehot);margin-bottom:10px}
 .kicker:before{content:"// "}
@@ -226,7 +244,7 @@ h1{font-family:var(--mono);font-weight:700;letter-spacing:-.01em}
 .tag-null{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--ghost);border:1px solid var(--line);padding:1px 7px;margin-left:4px;font-style:normal}
 @media(max-width:560px){.field{grid-template-columns:1fr;gap:5px}}
 table{border-collapse:collapse;width:100%;font-size:12.5px}
-th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);text-align:left;font-weight:600;padding:11px 14px;border-bottom:1px solid var(--lineh);background:#070b12}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);text-align:left;font-weight:600;padding:11px 14px;border-bottom:1px solid var(--lineh);background:var(--void)}
 td{padding:10px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);color:var(--body);vertical-align:middle}
 tr:last-child td{border-bottom:none}tr:hover td{background:var(--panel2)}
 td.name a{font-weight:600;color:var(--ink)}
@@ -234,8 +252,8 @@ td.name a{font-weight:600;color:var(--ink)}
 .pill.ok{color:var(--add);border-color:rgba(0,224,139,.35);background:var(--adddim)}
 .pill.lo{color:var(--warn);border-color:rgba(255,180,84,.3)}
 .yes{color:var(--add)}.no{color:var(--ghost)}
-.table-wrap{overflow-x:auto;border:1px solid var(--lineh);background:var(--panel)}
-.grid-stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--lineh);background:var(--panel);margin:26px 0}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);background:var(--panel);border-radius:12px;box-shadow:var(--shadow)}
+.grid-stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--panel);margin:26px 0;border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
 @media(max-width:760px){.grid-stats{grid-template-columns:repeat(2,1fr)}}
 .cell{padding:18px 20px;border-right:1px solid var(--line)}.cell:last-child{border-right:none}
 .cell .n{font-family:var(--mono);font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -254,6 +272,29 @@ td.name a{font-weight:600;color:var(--ink)}
 .cols{display:grid;grid-template-columns:1fr 320px;gap:22px;align-items:start}
 @media(max-width:900px){.cols{grid-template-columns:1fr}}
 .catlist{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 26px}
+.shell:has(.home){max-width:1240px}
+.home{display:grid;grid-template-columns:210px minmax(0,1fr);gap:34px;align-items:start;margin-top:18px}
+.home-main{min-width:0}
+.rail{position:sticky;top:14px;font-family:var(--mono);font-size:12px;max-height:calc(100vh - 26px);overflow-y:auto;padding-right:2px}
+.rail-h{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--bluehot);margin:0 0 6px;padding:0 8px}
+.rail-sec{margin-top:16px}
+.rail-link{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 8px;color:var(--body);border-radius:4px;line-height:1.35}
+.rail-link:hover{background:var(--panel);color:var(--ink);text-decoration:none}
+.rail-link.active{color:var(--ink);background:var(--panel);font-weight:600}
+.rail-link span{color:var(--ghost);font-size:11px;font-variant-numeric:tabular-nums}
+.rail-add{display:block;margin:18px 0 8px;text-align:center;color:var(--add);border:1px solid var(--adddim);background:var(--adddim);padding:8px;border-radius:5px;font-size:12px;letter-spacing:.02em}
+.rail-add:hover{text-decoration:none;filter:brightness(1.2)}
+.home-h1{font-family:var(--sans);font-size:clamp(22px,2.7vw,30px);line-height:1.2;letter-spacing:-.02em;margin:0 0 10px;max-width:20em;font-weight:750}
+.home-sub{color:var(--body);font-size:14px;line-height:1.55;margin:0 0 15px;max-width:62ch}
+.home-sub b{color:var(--ink)}
+.statline{display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--dim);margin:0 0 12px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.statline b{color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums}
+.mobcats{display:none}
+@media(max-width:820px){
+  .home{grid-template-columns:1fr;gap:0}
+  .rail{display:none}
+  .mobcats{display:flex;margin:12px 0 2px}
+}
 .add{color:var(--add)}.del{color:var(--del,#ff5c5c);text-decoration:line-through;text-decoration-thickness:1px}
 .chip.sig{color:var(--warn);border-color:rgba(255,180,84,.3);background:rgba(255,180,84,.07)}
 .chg-row{border-top:1px solid var(--line);padding:12px 0}
@@ -272,6 +313,9 @@ footer a{color:var(--dim)}
 border:1px solid var(--lineh);padding:10px 12px;width:100%;box-sizing:border-box}
 .fld:focus{outline:none;border-color:var(--bluehot)}
 textarea.fld{min-height:90px;resize:vertical}
+.add-note{font-family:var(--mono);font-size:12.5px;line-height:1.5;padding:10px 12px;margin:0 0 12px;border:1px solid var(--lineh)}
+.add-note.ok{color:var(--add);border-color:var(--adddim);background:var(--adddim)}
+.add-note.err{color:var(--warn);border-color:rgba(255,180,84,.28);background:rgba(255,180,84,.10)}
 .btn.solid{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
 .btn.solid:hover{background:var(--bluehot);color:#fff;text-decoration:none}
 .caprow{display:flex;gap:10px;margin-top:14px}
@@ -281,8 +325,8 @@ textarea.fld{min-height:90px;resize:vertical}
 .logo.lg{width:30px;height:30px;vertical-align:-6px;border-radius:5px}
 .searchwrap{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0 14px}
 .search{flex:1;min-width:240px;background:var(--panel);border:1px solid var(--lineh);color:var(--ink);
-font-family:var(--mono);font-size:13.5px;padding:11px 14px;outline:none}
-.search:focus{border-color:var(--bluehot)}
+font-family:var(--mono);font-size:13.5px;padding:12px 15px;outline:none;border-radius:9px;box-shadow:var(--shadow)}
+.search:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--bluedim)}
 .search::placeholder{color:var(--ghost)}
 .kbd{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--line);padding:2px 6px}
 .fchip{cursor:pointer;user-select:none}
@@ -294,6 +338,13 @@ font-family:var(--mono);font-size:12.5px;color:var(--body)}
 .sponsorbar.open{border-style:dashed;color:var(--dim)}
 .pill.sp{color:var(--warn);border-color:rgba(255,180,84,.3);flex:none}
 .pill.feat{color:var(--bluehot);border-color:var(--bluedim);background:rgba(31,94,255,.08)}
+.quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0 8px}
+@media(max-width:760px){.quotes{grid-template-columns:1fr}}
+.quote{position:relative;padding:22px 20px 18px;display:flex;flex-direction:column;gap:14px}
+.quote p{margin:0;font-size:14px;line-height:1.6;color:var(--ink)}
+.quote p:before{content:"“";color:var(--blue);font-family:var(--mono);font-size:20px;margin-right:2px}
+.quote .who{margin-top:auto;font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--dim)}
+.quote .who b{display:block;color:var(--body);font-size:12px;letter-spacing:.02em}
 """
 
 
@@ -333,13 +384,13 @@ def page(title, desc, canonical, body_html, base, jsonld=None, noindex=False):
 <div class="shell">
 <div class="nav">
   <a class="brand" href="/"><span class="mark">/API</span>&nbsp;TERMS</a>
-  <nav class="topnav"><a href="/categories/">Categories</a><a href="/changes/">Changes</a><a href="/report/">Report</a><a href="/dataset/">Dataset</a><a href="/sponsors/">Sponsor</a></nav>
+  <nav class="topnav"><a href="/categories/">Categories</a><a href="/changes/">Changes</a><a href="/report/">Report</a><a href="/dataset/">Dataset</a><a href="/add/" class="nav-add">+ Add an API</a><a href="/sponsors/">Sponsor</a></nav>
 </div>
 {body_html}
 <footer>
 PUBLIC API TERMS, STRUCTURED AND FRESH — AUTH · PRICING · RATE LIMITS · SPEC · MCP<br>
-Per-field evidence URLs, re-verified on a schedule. apis.guru froze in 2023 — rebuilt for agents.<br>
-<a href="/methodology/">Methodology</a> · <a href="/add/">Add an API</a> · <a href="/changes/">Changes</a> · <a href="/correct/">Corrections</a> · <a href="/dataset/">Dataset</a> · <a href="/sponsors/">Become a sponsor</a> · <a href="/llms.txt">llms.txt</a>
+Per-field evidence URLs, verified on a schedule. apis.guru froze in 2023 — rebuilt for agents.<br>
+<a href="/methodology/">Methodology</a> · <a href="/add/">Add an API</a> · <a href="/changes/">Changes</a> · <a href="/correct/">Corrections</a> · <a href="/dataset/">Dataset</a> · <a href="/sponsors/">Become a sponsor</a> · <a href="{CAL_LINK}" target="_blank" rel="noopener">Book a call</a> · <a href="/llms.txt">llms.txt</a>
 </footer>
 </div>
 <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
@@ -471,7 +522,18 @@ def record_page(rec, base, history=None):
       <li><span class="ck">▸</span><span>Honest nulls: <b>"not documented" is data</b>, never a guess.</span></li>
     </ul>
     <a class="btn" href="/correct/?domain={escape(dom)}&amp;kind=correction">Suggest a correction</a>
-    <a class="btn" style="margin-top:8px" href="/correct/?domain={escape(dom)}&amp;kind=claim">Your API? Claim this page</a>
+  </div>
+  <div class="panel card" style="border-color:var(--bluedim);background:linear-gradient(180deg,rgba(31,94,255,.05),transparent)">
+    <h3>Run {escape(name)}?</h3>
+    <p class="sub" style="margin:0 0 12px;font-size:13px">Claim this page to keep your listing
+    accurate and get ahead of changes. Claiming lets you:</p>
+    <ul>
+      <li><span class="ck">▸</span><span><b>Verify the record</b> — confirm every field is right, straight from the source.</span></li>
+      <li><span class="ck">▸</span><span><b>Get change alerts</b> — know the moment we detect a pricing, limit or auth change.</span></li>
+      <li><span class="ck">▸</span><span><b>Earn a verified badge</b> — and the option to feature your listing.</span></li>
+    </ul>
+    <a class="btn solid" href="/correct/?domain={escape(dom)}&amp;kind=claim">Claim this page →</a>
+    <p class="sub" style="margin:10px 0 0;font-size:11.5px;color:var(--dim)">Free to claim. Placement never changes a field or its evidence.</p>
   </div>
   <div class="panel card">
     <h3>Machine-readable</h3>
@@ -552,6 +614,23 @@ def category_page(cat, recs, base, sponsors):
     return page(title, desc, url, body, base), url
 
 
+def testimonials_section():
+    """Renders the homepage social-proof band — or nothing at all when TESTIMONIALS
+    is empty. See the TESTIMONIALS constant: entries are placeholders and must be
+    replaced with real, permissioned quotes before shipping publicly."""
+    if not TESTIMONIALS:
+        return ""
+    cards = "\n".join(
+        f'<figure class="panel quote">'
+        f'<p>{escape(t["quote"])}</p>'
+        f'<figcaption class="who"><b>{escape(t["name"])}</b>'
+        f'{escape(t["role"])} · {escape(t["company"])}</figcaption></figure>'
+        for t in TESTIMONIALS)
+    return f"""<div class="kicker" style="margin-top:32px">What builders say</div>
+<div class="quotes">{cards}</div>
+"""
+
+
 def index_page(recs, cats, base, corpus_stats, changelog=None):
     n = len(recs)
     # Stat band: all four over the SAME denominator (the published records) so the
@@ -578,65 +657,71 @@ def index_page(recs, cats, base, corpus_stats, changelog=None):
     title = "API Terms — auth, pricing & rate limits for every public API"
     desc = (f"{n} public APIs as structured data: auth type, pricing, free tier, rate limits, "
             "OpenAPI spec, MCP server. A source URL on every field, re-verified on a schedule.")
-    cat_links = "\n".join(
-        f'<a class="chip cat" href="/category/{slugify(c)}/">{escape(c)} · {len(rs)}</a>'
+    free_n = sum(1 for r in recs if v(r, "free_tier"))
+    mcp_n = sum(1 for r in recs if v(r, "mcp_server"))
+    spec_n = sum(1 for r in recs if v(r, "openapi_spec_url"))
+    noauth_n = sum(1 for r in recs if v(r, "auth_type") == "none")
+    rail_cats = "\n".join(
+        f'<a class="rail-link" href="/category/{slugify(c)}/">{escape(c)}<span>{len(rs):,}</span></a>'
         for c, rs in cats)
-    feed_capture = ""
-    if FORMSPREE_PROJECT:
-        feed_capture = f"""<div class="panel card" style="margin:0 0 26px">
+    mob_cats = "".join(
+        f'<a class="chip cat" href="/category/{slugify(c)}/">{escape(c)} · {len(rs)}</a>'
+        for c, rs in cats[:10])
+    feed_capture = f"""<div class="panel card" id="feed" style="margin:26px 0 0">
   <h3>The change feed</h3>
+  <div id="feed-msg" role="status"></div>
   <p class="sub" style="margin:0;font-size:13.5px">Vendors change pricing, limits and auth
-  quietly. We re-crawl every source page and diff it. Leave an email, get what changed.</p>
-  <form class="caprow" action="{form_action('feed')}" method="POST">
-    <input type="hidden" name="_subject" value="Change-feed signup — apiterms.com">
+  quietly. We re-crawl every source page and diff it. Browse it at
+  <a href="/changes/">/changes/</a> or <a href="/changes.xml">RSS</a> — or leave your email
+  and we'll send the digest as soon as it ships.</p>
+  <form class="caprow" action="/.netlify/functions/subscribe" method="POST">
+    <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
+     style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
     <input class="fld" type="email" name="email" placeholder="you@company.com" required>
-    <button class="btn solid" type="submit">Get the feed</button>
+    <button class="btn solid" type="submit">Join the feed</button>
   </form>
 </div>"""
     body = f"""
-<div style="padding:44px 0 6px">
-  <div class="kicker">Machine-readable · re-verified on a schedule</div>
-  <h1 style="font-size:clamp(24px,3.6vw,34px);line-height:1.25;margin:0 0 14px;max-width:24em">
-    The terms of {n:,} public APIs. One record each. Every verified claim sourced.</h1>
-  <p class="sub" style="font-size:16px">Auth type, pricing, free tier, rate limits, OpenAPI spec, MCP server —
-  extracted from each vendor's own pages with <b style="color:var(--ink)">an evidence URL on every verified claim</b>.
-  When a vendor doesn't document something, the field says <span class="mono">null</span>. We don't guess.</p>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
-    <a class="btn solid" style="width:auto;display:inline-block;padding:11px 20px" href="#q">Search the census ⌘K</a>
-    <a class="btn" style="width:auto;display:inline-block;padding:11px 20px" href="/categories/">Browse categories</a>
-    <a class="btn" style="width:auto;display:inline-block;padding:11px 20px" href="/methodology/">How it's verified</a>
-  </div>
-</div>
-<div class="grid-stats">
-  <div class="cell" title="APIs with a verified, source-linked record — every field cites the vendor page that states it"><div class="n">{n:,}</div><div class="l">APIs documented</div></div>
-  <div class="cell" title="Share of documented APIs with a free tier we could verify from the vendor's own pages"><div class="n">{free_pct}<em>%</em></div><div class="l">have a free tier</div></div>
-  <div class="cell" title="Share that document an MCP server for AI agents — now more than twice the OpenAPI-spec rate"><div class="n">{mcp_pct}<em>%</em></div><div class="l">ship an MCP server</div></div>
-  <div class="cell" title="Share that publish an OpenAPI / Swagger spec at a discoverable URL"><div class="n">{rec_spec_pct}<em>%</em></div><div class="l">publish a spec</div></div>
-</div>
-{ticker}
-{feed_capture}
-<div id="categories" class="kicker" style="margin-top:10px">Categories · <a href="/categories/" style="text-transform:none;letter-spacing:0">all →</a></div>
-<div class="catlist">{cat_links}</div>
-<div class="kicker">Collections</div>
-<div class="catlist">
-  <a class="chip cat" href="/free-apis/">Free APIs</a>
-  <a class="chip cat" href="/no-auth-apis/">No-auth APIs</a>
-  <a class="chip cat" href="/openapi-apis/">OpenAPI specs</a>
-  <a class="chip cat" href="/mcp-apis/">MCP servers</a>
-</div>
-<div class="kicker">Directory — all published records · <a href="/add/" style="text-transform:none;letter-spacing:0">missing one you use? add it →</a></div>
-<div class="searchwrap">
-  <input class="search" id="q" type="search" placeholder="Search {n:,} APIs — name, domain, category, auth…" autocomplete="off">
-  <span class="kbd">⌘K</span>
-  <span class="chip fchip" data-f="free">free tier</span>
-  <span class="chip fchip" data-f="mcp">MCP</span>
-  <span class="chip fchip" data-f="spec">OpenAPI</span>
-  <span class="chip fchip" data-f="hi">high confidence</span>
-  <span class="nshow"><b id="nshow">{n:,}</b> shown</span>
-</div>
-<div class="table-wrap"><table>{TABLE_HEAD}<tbody>
+<div class="home">
+  <aside class="rail">
+    <div class="rail-h">Browse</div>
+    <a class="rail-link active" href="/">All APIs<span>{n:,}</span></a>
+    <div class="rail-h rail-sec">Collections</div>
+    <a class="rail-link" href="/free-apis/">Free tier<span>{free_n:,}</span></a>
+    <a class="rail-link" href="/no-auth-apis/">No auth<span>{noauth_n:,}</span></a>
+    <a class="rail-link" href="/openapi-apis/">OpenAPI spec<span>{spec_n:,}</span></a>
+    <a class="rail-link" href="/mcp-apis/">MCP server<span>{mcp_n:,}</span></a>
+    <div class="rail-h rail-sec">Categories</div>
+    {rail_cats}
+    <a class="rail-add" href="/add/">+ Add an API</a>
+  </aside>
+  <div class="home-main">
+    <h1 class="home-h1">The terms of every public API — structured, sourced, re-verified.</h1>
+    <p class="home-sub">Auth, pricing, free tier, rate limits, OpenAPI spec &amp; MCP for {n:,} APIs,
+    with <b>an evidence URL on every verified claim</b>. <a href="/methodology/">How it's verified →</a></p>
+    <div class="statline">
+      <span><b>{n:,}</b> APIs documented</span>
+      <span><b>{free_pct}%</b> free tier</span>
+      <span><b>{mcp_pct}%</b> ship MCP</span>
+      <span><b>{rec_spec_pct}%</b> publish a spec</span>
+    </div>
+    <div class="catlist mobcats">{mob_cats}<a class="chip cat" href="/categories/">all →</a></div>
+    <div class="searchwrap">
+      <input class="search" id="q" type="search" placeholder="Search {n:,} APIs — name, domain, category, auth…" autocomplete="off">
+      <span class="kbd">⌘K</span>
+      <span class="chip fchip" data-f="free">free tier</span>
+      <span class="chip fchip" data-f="mcp">MCP</span>
+      <span class="chip fchip" data-f="spec">OpenAPI</span>
+      <span class="chip fchip" data-f="hi">high confidence</span>
+      <span class="nshow"><b id="nshow">{n:,}</b> shown</span>
+    </div>
+    <div class="table-wrap"><table>{TABLE_HEAD}<tbody>
 {table_rows(recs, base, logo_limit=100)}
 </tbody></table></div>
+    {ticker}
+    {feed_capture}
+  </div>
+</div>
 <script>
 var rows=[].slice.call(document.querySelectorAll("tbody tr")),
     q=document.getElementById("q"),
@@ -655,6 +740,13 @@ q.addEventListener("input",apply);
 chips.forEach(function(c){{c.addEventListener("click",function(){{c.classList.toggle("on");apply()}})}});
 document.addEventListener("keydown",function(e){{
   if((e.metaKey||e.ctrlKey)&&e.key==="k"){{e.preventDefault();q.focus()}}}});
+(function(){{
+  var sub=new URLSearchParams(location.search).get("sub"), box=document.getElementById("feed-msg");
+  if(!sub||!box) return;
+  var form=box.parentNode.querySelector("form");
+  if(sub==="ok"){{ box.textContent="You're on the list — we'll email the digest when it ships."; box.className="add-note ok"; if(form)form.style.display="none"; }}
+  else {{ box.textContent="Couldn't sign you up just then — please try again."; box.className="add-note err"; }}
+}})();
 </script>"""
     return page(title, desc, f"{base}/", body, base)
 
@@ -731,10 +823,11 @@ the change feed (what changed, when, with proof), history, and commercial licens
       to <b>apiterms.com</b>.</span></li>
       <li><span class="ck">▸</span><span>Redistribution, resale, model training or bundling:
       <b>licensed separately</b> — <a href="/correct/">contact us</a>.</span></li>
-      <li><span class="ck">▸</span><span>Re-verified on a published schedule; see
+      <li><span class="ck">▸</span><span>Re-verified on a schedule; see
       <a href="/methodology/">methodology</a>.</span></li>
     </ul>
     <a class="btn" href="/correct/">License the data / change feed</a>
+    <a class="btn" style="margin-top:8px" href="{CAL_LINK}" target="_blank" rel="noopener">Book a call →</a>
   </div>
 </aside>
 </div>"""
@@ -805,9 +898,12 @@ def sponsors_page(n_recs, cats, base, sponsors):
     <textarea class="fld" name="message" style="margin-top:8px"
      placeholder="Which category / featured listing are you interested in?"></textarea>
     <button class="btn solid" type="submit" style="margin-top:8px">Ask for rates</button>
+    <a class="btn" style="margin-top:8px" href="{CAL_LINK}" target="_blank" rel="noopener">Or book a call →</a>
     </form>"""
     else:
-        sponsor_cta = '<a class="btn" href="/correct/">Contact us</a>'  # no email on site
+        sponsor_cta = (f'<a class="btn" href="/correct/">Contact us</a>'
+                       f'<a class="btn" style="margin-top:8px" href="{CAL_LINK}" '
+                       f'target="_blank" rel="noopener">Book a call →</a>')  # no email on site
     body = f"""
 <div class="crumbs"><a href="/">API Terms</a><span>/</span>Sponsors</div>
 <div class="kicker">Sponsors</div>
@@ -862,14 +958,52 @@ def correct_page(base):
     desc = ("Spotted a wrong field? Run one of these APIs? Every record links its "
             "sources — tell us what changed and we re-verify.")
     body = f"""
-<div class="crumbs"><a href="/">API Terms</a><span>/</span>Corrections</div>
-<div class="kicker">Accuracy</div>
-<h1 style="font-size:26px;margin:0 0 8px">Corrections &amp; vendor claims</h1>
-<p class="sub">One wrong pricing claim is one too many. Every field on every record
-links the page it came from — if reality moved, tell us and we re-verify against
-the source. API vendors: use the same form to claim your page.</p>
+<div class="crumbs"><a href="/">API Terms</a><span>/</span><span id="crumb-leaf">Corrections</span></div>
+
+<div id="hero-correct">
+  <div class="kicker">Accuracy</div>
+  <h1 style="font-size:26px;margin:0 0 8px">Corrections &amp; vendor claims</h1>
+  <p class="sub">One wrong pricing claim is one too many. Every field on every record
+  links the page it came from — if reality moved, tell us and we re-verify against
+  the source. API vendors: use the same form to claim your page.</p>
+</div>
+
+<div id="hero-claim" style="display:none">
+  <div class="kicker">For API vendors</div>
+  <h1 style="font-size:26px;margin:0 0 8px">Claim your API&#39;s page</h1>
+  <p class="sub">This is your listing on the live terms layer that developers and AI agents
+  check before they pick an API. Claim it to confirm it&#39;s right, stay ahead of changes,
+  and unlock a verified badge — free.</p>
+  <div class="cols" style="margin-top:20px;align-items:stretch">
+    <div class="panel card" style="margin:0">
+      <h3>How claiming works</h3>
+      <ul>
+        <li><span class="ck">1</span><span><b>You verify ownership.</b> Submit from a company
+        address (or point us at the docs you control) so we know it&#39;s really you.</span></li>
+        <li><span class="ck">2</span><span><b>We confirm the record with you.</b> We walk the
+        fields against your own pages and fix anything stale — every value keeps its evidence URL.</span></li>
+        <li><span class="ck">3</span><span><b>You get verified.</b> An optional verified badge,
+        change alerts when your terms move, and the option to feature your listing.</span></li>
+      </ul>
+      <p class="sub" style="margin:4px 0 0;font-size:11.5px;color:var(--dim)">Placement never buys a
+      field: claiming keeps your record accurate, it doesn&#39;t let you rewrite it.</p>
+    </div>
+    <div class="panel card" style="margin:0">
+      <h3>Why claim it</h3>
+      <ul>
+        <li><span class="ck">▸</span><span>Developers and agents compare terms here <b>right before
+        they choose</b> — an accurate, verified listing wins the pick.</span></li>
+        <li><span class="ck">▸</span><span>Vendors change pricing and limits quietly; a claim means
+        <b>you hear about our next detected change first</b>.</span></li>
+        <li><span class="ck">▸</span><span>Setup takes one message. We reply, confirm, and mark
+        the page verified.</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
 <div class="panel card" style="max-width:560px;margin-top:22px">
-  <h3>What's wrong (or yours)?</h3>
+  <h3 id="form-hd">What&#39;s wrong (or yours)?</h3>
   <form action="{form_action('correction')}" method="POST">
     <input class="fld" type="text" name="domain" id="f-domain" placeholder="api domain, e.g. stripe.com" required>
     <select class="fld" name="kind" id="f-kind" style="margin-top:8px">
@@ -878,16 +1012,27 @@ the source. API vendors: use the same form to claim your page.</p>
       <option value="add">Add — an API that's missing from the census</option>
       <option value="other">Something else</option>
     </select>
-    <input class="fld" type="email" name="email" placeholder="you@company.com" required style="margin-top:8px">
-    <textarea class="fld" name="message" style="margin-top:8px"
+    <input class="fld" type="email" name="email" id="f-email" placeholder="you@company.com" required style="margin-top:8px">
+    <textarea class="fld" name="message" id="f-msg" style="margin-top:8px"
      placeholder="Which field, what it should say, and (ideally) the URL that proves it."></textarea>
-    <button class="btn solid" type="submit" style="margin-top:8px">Send</button>
+    <button class="btn solid" type="submit" id="f-submit" style="margin-top:8px">Send</button>
   </form>
 </div>
 <script>
 var q=new URLSearchParams(location.search);
 if(q.get("domain"))document.getElementById("f-domain").value=q.get("domain");
-if(q.get("kind"))document.getElementById("f-kind").value=q.get("kind");
+var kind=q.get("kind");
+if(kind)document.getElementById("f-kind").value=kind;
+if(kind==="claim"){{
+  document.getElementById("hero-correct").style.display="none";
+  document.getElementById("hero-claim").style.display="";
+  document.getElementById("crumb-leaf").textContent="Claim your page";
+  document.getElementById("form-hd").textContent="Start your claim";
+  document.getElementById("f-email").placeholder="you@yourcompany.com (a company address helps us verify)";
+  document.getElementById("f-msg").placeholder="Confirm you run this API and note anything that's out of date. Link us to a page you control (docs, dashboard) so we can verify ownership.";
+  document.getElementById("f-submit").textContent="Submit claim →";
+  document.title="Claim your API's page — API Terms";
+}}
 </script>"""
     return page(title, desc, url, body, base), url
 
@@ -895,7 +1040,7 @@ if(q.get("kind"))document.getElementById("f-kind").value=q.get("kind");
 def add_page(base):
     """Suggest-an-API page. Contributors expand COVERAGE (a domain to cover); they never
     write field values — the pipeline crawls, extracts with evidence, and QA-gates it, so
-    the evidence-or-null guarantee holds even for community submissions."""
+    the evidence-or-null guarantee (the moat) holds even for community submissions."""
     url = f"{base}/add/"
     title = "Add an API to the census — API Terms"
     desc = ("Missing an API you use? Tell us the domain — we crawl it, extract the terms "
@@ -912,8 +1057,11 @@ you expand what we track, never the values themselves.</p>
 <div class="cols" style="margin-top:22px">
   <div class="panel card" style="max-width:520px">
     <h3>Suggest an API</h3>
-    <form action="{form_action('correction')}" method="POST">
+    <div id="add-msg" role="status"></div>
+    <form action="/.netlify/functions/add-api" method="POST">
       <input type="hidden" name="kind" value="add">
+      <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
+       style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <input class="fld" type="text" name="domain" placeholder="api domain, e.g. resend.com" required>
       <input class="fld" type="url" name="docs" placeholder="docs / pricing URL (optional, speeds it up)" style="margin-top:8px">
       <input class="fld" type="email" name="email" placeholder="you@company.com (we'll tell you when it's live)" required style="margin-top:8px">
@@ -921,6 +1069,8 @@ you expand what we track, never the values themselves.</p>
        placeholder="Anything that helps — what the API does, where the pricing page is, etc. (optional)"></textarea>
       <button class="btn solid" type="submit" style="margin-top:8px">Add it to the queue →</button>
     </form>
+    <p class="sub" style="font-size:12px;margin:10px 0 0;color:var(--dim)">Submit a domain and
+    it's queued automatically — the next weekly run crawls, verifies and publishes it.</p>
   </div>
   <aside>
     <div class="panel card">
@@ -929,19 +1079,30 @@ you expand what we track, never the values themselves.</p>
         <li><span class="ck">1</span><span>You submit a <b>domain</b> — not data.</span></li>
         <li><span class="ck">2</span><span>Our crawler reads the vendor's own docs and pricing pages.</span></li>
         <li><span class="ck">3</span><span>Every field extracted gets <b>the source URL that states it</b>; anything undocumented stays <span class="mono">null</span>.</span></li>
-        <li><span class="ck">4</span><span>It passes the QA gate, then publishes with a record page.</span></li>
+        <li><span class="ck">4</span><span>It passes the QA gate, publishes a record page, and is <b>re-verified weekly</b> from then on — automatically.</span></li>
       </ul>
       <p class="sub" style="font-size:12.5px;margin:12px 0 0">Want to see exactly how a record is
       built and verified first? Read the <a href="/methodology/">methodology</a>.</p>
     </div>
   </aside>
-</div>"""
+</div>
+<script>
+(function(){{
+  var p=new URLSearchParams(location.search), box=document.getElementById('add-msg');
+  if(!box) return;
+  var ok=p.get('ok'), err=p.get('err');
+  function show(t,cls){{ box.textContent=t; box.className='add-note '+cls; }}
+  if(ok) show('Thanks — queued. We crawl and verify it on the next weekly run, then it goes live.','ok');
+  else if(err==='domain') show('That doesn\\'t look like a valid domain. Try just the host, e.g. resend.com','err');
+  else if(err) show('Something went wrong saving that — please try again in a moment.','err');
+}})();
+</script>"""
     return page(title, desc, url, body, base), url
 
 
 def report_page(recs, base):
     """State of the API Economy — data story computed live from the corpus, so every
-    figure updates as the census grows (never a stale number)."""
+    figure updates as the census grows (proof-engine ethos: never a stale number)."""
     import collections
     url = f"{base}/report/"
     n = len(recs)
@@ -1226,9 +1387,10 @@ the current limitations are.</p>
   <div class="panel card">
     <h3>Verification &amp; QA</h3>
     <ul>
-      <li><span class="ck">▸</span><span><b>Re-verification is scheduled</b> — the cadence stated
-      on each record is the one that applies to it. Source pages are re-fetched and diffed;
-      changed sources trigger re-extraction.</span></li>
+      <li><span class="ck">▸</span><span><b>Re-verification runs the snapshot clock</b>: source
+      pages are re-fetched and diffed against the stored snapshot, and any changed source
+      triggers re-extraction — the diffs feed the <a href="/changes/">change feed</a>. Each
+      record shows its own <span class="mono">last_verified</span> date.</span></li>
       <li><span class="ck">▸</span><span><b>{funnel['assertions']} golden assertions</b> guard
       hand-audited records (Stripe, GitHub, OpenAI, Slack…): any build in which one of those
       verified fields regresses to null <b>fails and cannot deploy</b>.</span></li>

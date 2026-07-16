@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""State of the API Economy — the corpus statistics report.
+"""State of the API Economy — the proof-engine report.
 
-Computes the headline numbers reproducibly from the pipeline's own data, so any
-figure quoted about the corpus can be regenerated from the committed dataset rather
-than hand-waved.
+REUSE doc: "monthly number + one chart + LinkedIn/HN/subreddit" transfers verbatim;
+'State of the API Economy' is the EU Rent Index of this product. This computes the
+headline numbers reproducibly from the pipeline's own data so the launch post (and the
+monthly ritual) never hand-waves a stat.
 
   python3 ingest/stats.py
 
 Two sections:
-  CORPUS   — from data/seed_classified.jsonl (the classified seed universe):
+  CORPUS   — from data/seed_classified.jsonl (the 1,833-domain census universe):
              liveness, llms.txt adoption, spec availability, category spread.
   EXTRACTED — from data/census.jsonl once fill has run: auth/pricing/MCP/free-tier
              distributions across completed records + extraction confidence.
@@ -101,7 +102,7 @@ def extracted_section(recs):
 def main():
     classified = load(CLASSIFIED)
     census = load(CENSUS)
-    print("STATE OF THE API ECONOMY — API Terms corpus report")
+    print("STATE OF THE API ECONOMY — API Census proof-engine report")
     if classified:
         corpus_section(classified)
     else:

@@ -11,19 +11,19 @@ what does it cost, what are the limits) has never existed as data. This is the p
 compiles it, and keeps it current.
 
 > **One finding from the full corpus:** more public APIs now ship a **documented MCP server**
-> than expose an **OpenAPI spec URL** — **2.25× as many** (16.3% vs 7.2%). The tooling
+> than expose an **OpenAPI spec URL** — **2.4× as many** (17% vs 7%). The tooling
 > ecosystem is still organized around the spec; the APIs have moved to the agent interface.
 
 ## What's in this repo
 
 The **pipeline is fully open** — every line of code that turns a vendor's docs page into a
 verified record. A **250-record sample** ([`data/sample.jsonl`](data/sample.jsonl)) and the
-full **coverage list** of 1,340 domains ([`data/seed_domains.txt`](data/seed_domains.txt))
+full **coverage list** of 1,727 domains ([`data/seed_domains.txt`](data/seed_domains.txt))
 are here too.
 
 > The shipped sample is a **quality-filtered slice** (high/medium-confidence records only), so
-> its field-fill rates run higher than the full-corpus figures above — in the sample, ~35% ship
-> an MCP server and ~26% a spec. The MCP-over-OpenAPI direction holds in both; the exact
+> its field-fill rates run higher than the full-corpus figures above — in the sample, ~31% ship
+> an MCP server and ~16% a spec. The MCP-over-OpenAPI direction holds in both; the exact
 > corpus-wide percentages come from the full dataset, not this sample.
 
 The **full live dataset** (all records + the change history that powers the
@@ -36,6 +36,8 @@ ingest/classify.py      liveness + llms.txt + openapi.json probes -> extraction 
 ingest/add_domains.py   read data/seed_domains.txt (the PR target) -> extraction queue
 ingest/extract.py       crawl: fetch candidate docs pages | fill: LLM + strict schema + evidence
 ingest/qa.py            QA gate: rejects fabricated evidence, checks golden assertions
+ingest/quarantine.py    self-healing: a refill that fails QA reverts to last-known-good
+ingest/submissions.py   community-submitted domains -> extraction queue (the /add flow)
 ingest/refresh.py       layer 1 — re-fetch source pages, detect changes ($0, no API key)
 ingest/changelog.py     layer 2 — diff record values -> the change feed
 ingest/stats.py         "State of the API Economy" report from the corpus

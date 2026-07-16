@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Classify pass: probe every seed domain for liveness + machine-readable surfaces.
+"""S1 classify pass: probe every seed domain for liveness + machine-readable surfaces.
 
 Per domain (max 4 cheap requests, honest UA, 10s timeout, full TLS verification —
 a broken cert counts as not-alive, which is honest census data):

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """QA gate for the extraction output — run on every fill batch before publish.
 
-Accuracy is the trust moat: one wrong pricing claim on a public page kills the product.
-This validates data/census.jsonl structurally, flags records for human review, and prints
-a 5% manual-review sample.
+Accuracy is the trust moat: one wrong pricing claim on a pSEO page kills
+the product. This validates data/census.jsonl structurally, flags records for human
+review, and prints a 5% manual-review sample.
 
   python3 ingest/qa.py [path]      # default data/census.jsonl
 
@@ -21,11 +21,21 @@ Checks, per record:
 Exit code is non-zero if any CRITICAL flag fires, so it can gate a batch in a pipeline.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT = ROOT / "data" / "census.jsonl"
+
+# Reasoning-leak: the model's chain-of-thought / JSON scratchpad occasionally bleeds
+# into a string field instead of a clean value. These markers never appear in a real
+# API name or one-sentence description, so they're an unambiguous critical flag. (Kept
+# tight on purpose — e.g. "per the JSON API spec" is legit, so bare "json" is NOT here.)
+LEAK = re.compile(
+    r"(<br\s*/?>|</?[a-z]+>|\}\}|\{\"|\blet me (write|construct|focus|start)\b"
+    r"|ok,? enough|i have all the info|the page mentions|write the json|here is the json)",
+    re.I)
 
 REQUIRED = ["name", "what_it_does", "base_url", "auth_type", "free_tier",
             "pricing_model", "pricing_details", "rate_limits", "openapi_spec_url",
@@ -46,6 +56,14 @@ def audit(rec: dict) -> dict:
 
     if rec.get("confidence") not in ("high", "medium", "low"):
         crit.append(f"bad_confidence:{rec.get('confidence')!r}")
+
+    # reasoning-leak: raw chain-of-thought / JSON scratchpad in a display field
+    for f in ("name", "what_it_does"):
+        s = rec.get(f)
+        if isinstance(s, str) and LEAK.search(s):
+            crit.append(f"reasoning_leak:{f}")
+    if isinstance(rec.get("name"), str) and len(rec["name"]) > 80:
+        crit.append(f"name_too_long:{len(rec['name'])}")
 
     # the trust-critical check: every cited evidence_url must be a page we crawled
     for f in FIELD_OBJS:
