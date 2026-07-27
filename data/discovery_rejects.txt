@@ -1,0 +1,25 @@
+# Domains discovery must NEVER queue — wrong-entity resolutions and dupes, reviewed by
+# hand. discover.py consults this in existing(); add a line here to permanently ban.
+# (Bans the DOMAIN, not the product: the right domain for the product can still queue.)
+jordandalton.com
+emdashcommunications.com
+tnu.in
+recostseg.com
+docsio.co
+getcekuraai.com
+pylarinosadvertising.gr
+humalike.ai
+trugen.ai
+nikkei.com
+mioradio.net
+claude.com
+happycapyartstudio.com
+theatlasnews.co
+simplistic.com
+tinkerfcu.org
+magiclightpictures.com
+sparrow.org
+qwenchat.com
+codexworld.com
+headsupfortails.com
+dart.dev

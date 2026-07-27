@@ -50,7 +50,7 @@ on the last good build):
 
 Every line of code that builds the census and keeps it current, plus a **250-record
 sample** ([`data/sample.jsonl`](data/sample.jsonl)) and the full **coverage list** of
-1,727 domains ([`data/seed_domains.txt`](data/seed_domains.txt)).
+1,761 domains ([`data/seed_domains.txt`](data/seed_domains.txt)).
 
 ```
 build the census

@@ -63,6 +63,7 @@ anoram.com
 anthropic.com
 any-api.com
 anycrap.shop
+anysearch.com
 ap.org
 apache.org
 apacta.com
@@ -88,6 +89,7 @@ apis.guru
 apisetu.gov.in
 apispot.io
 apitemplate.io
+apitomcp.ai
 apixu.com
 apogeoapi.com
 apollo.io
@@ -219,6 +221,7 @@ browshot.com
 bsky.app
 btcturk.com
 buddy.works
+bufferapi.com
 bufferapp.com
 bugcrowd.com
 bugsnag.com
@@ -242,6 +245,7 @@ callfire.com
 callook.info
 calorieninjas.com
 cambase.io
+campus.com
 canada-holidays.ca
 canada.ca
 carbondoomsday.com
@@ -254,6 +258,7 @@ catboys.com
 catfact.ninja
 cbr.ru
 cdnjs.com
+cekura.com
 cenit.io
 census.gov
 censys.io
@@ -461,6 +466,8 @@ disqus.com
 dnd5eapi.co
 dnsforfamily.com
 docker.com
+docsalot.dev
+docsio.com
 docusign.com
 dog.ceo
 domainsdb.info
@@ -521,6 +528,7 @@ exchangerate.dev
 exchangerate.host
 exchangeratesapi.io
 exlibrisgroup.com
+exploreyc.com
 extendsclass.com
 extpose.com
 facebook.com
@@ -601,9 +609,11 @@ gdbrowser.com
 gdynia.pl
 geekflare.com
 gemini.com
+geminiomniflash.io
 genderize.io
 geneea.com
 generadordni.es
+generalcompute.com
 genius.com
 genshin.dev
 geoapify.com
@@ -676,6 +686,7 @@ hackerearth.com
 hackerone.com
 hackmyip.com
 handwrytten.com
+harnessrouter.ai
 harvard.edu
 hashnode.com
 hasura.io
@@ -715,6 +726,7 @@ hubapi.com
 hubhopper.com
 hubspot.com
 huggingface.co
+humalike.com
 humdata.org
 humorapi.com
 hunter.io
@@ -878,6 +890,7 @@ listennotes.com
 livekit.io
 ljaero.com
 llamaindex.ai
+llmtest.io
 lob.com
 loc.gov
 localbitcoins.com
@@ -979,6 +992,7 @@ mollie.com
 monarchinitiative.org
 monday.com
 mongodb.com
+monid.ai
 mono.co
 moov.io
 moss.land
@@ -1057,7 +1071,9 @@ o2.cz
 objectcut.com
 obono.at
 ocr.space
+octolens.com
 octopart.com
+octrafic.com
 octranspo.com
 oddsmagnet.com
 oikolab.com
@@ -1179,6 +1195,7 @@ pipedrive.com
 pirateweather.net
 pixabay.com
 pixe.la
+pixelgust.com
 place.dog
 placebear.com
 placekeanu.com
@@ -1186,6 +1203,7 @@ plaid.com
 planetscale.com
 playerdb.co
 plivo.com
+plurai.ai
 pm25.in
 pocketsmith.com
 podatki.gov.si
@@ -1212,8 +1230,10 @@ postmon.com.br
 postnord.com
 poststack.dev
 potterdb.com
+powabase.ai
 praha.eu
 prexview.com
+primetask.app
 prismic.io
 privacy.com
 probely.com
@@ -1225,6 +1245,7 @@ proxykingdom.com
 psychpsyo.com
 pubg.com
 public.lu
+publora.com
 pulsedive.com
 pumpfundata.com
 pusher.com
@@ -1266,6 +1287,7 @@ rebilly.com
 rebrandly.com
 receitaws.com.br
 recipeapi.io
+recost.io
 recreation.gov
 redash.io
 reddit.com
@@ -1302,6 +1324,7 @@ riotgames.com
 rippling.com
 ritc.io
 riverside.rocks
+rmcp.dev
 rmv.de
 road511.com
 roaring.io
@@ -1377,6 +1400,8 @@ shrtco.de
 shrtlnk.dev
 shutterstock.com
 signl4.com
+sim.ai
+simpleanalytics.com
 simplivpn.net
 simplyrets.com
 sinao.app
@@ -1392,6 +1417,7 @@ snapchat.com
 sncf.com
 snowflake.com
 snyk.io
+socialfetch.dev
 socrata.com
 solana.com
 solarvps.com
@@ -1496,6 +1522,7 @@ theguardian.com
 themealdb.com
 themoviedb.org
 themuse.com
+theneo.io
 thenewsapi.com
 thenounproject.com
 therundown.io
@@ -1504,6 +1531,7 @@ thespacedevs.com
 thesportsdb.com
 thetvdb.com
 theysaidso.com
+thisispaper.com
 thispersondoesnotexist.com
 thronesapi.com
 thunderbit.com
@@ -1543,6 +1571,7 @@ trashnothing.com
 travis-ci.com
 tredict.com
 trello.com
+triqai.com
 tronalddump.io
 truanon.com
 truora.com
@@ -1569,6 +1598,7 @@ ulvis.net
 umea.se
 umoiq.com
 unicourt.com
+unihosted.com
 universalis.app
 unplu.gg
 unsplash.com
@@ -1587,12 +1617,14 @@ usa.gov
 usajobs.gov
 usaspending.gov
 userstack.com
+usethrone.dev
 uspto.gov
 utah.gov
 uttesh.com
 uuidtools.com
 va.gov
 vagalume.com.br
+val.town
 valorant-api.com
 valr.com
 vatapi.com
@@ -1628,6 +1660,7 @@ waifu.pics
 wakatime.com
 wallhaven.cc
 walmart.com
+wan27image.com
 wandb.ai
 wargaming.net
 warnely.com
@@ -1714,6 +1747,7 @@ zeno.fm
 zenoti.com
 zenquotes.io
 zenrows.com
+zerogpu.ai
 zestfuldata.com
 zipcodeapi.com
 zippopotam.us

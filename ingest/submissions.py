@@ -20,6 +20,7 @@ Exit 0 always (a bad line is skipped, never fatal) so it's safe as cron step 0.
 Prints "QUEUED n" on the last line so the cron can decide whether to crawl this run.
 """
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -81,9 +82,10 @@ def main():
 
     raw = [l for l in INBOX.read_text().splitlines()]
     have = existing_domains()
+    cap = int(os.environ.get("SUB_CAP", "25"))
     processed, queued = [], 0
     seen_this_run = set()
-    keep_lines = []  # comments / blank lines are preserved; domain lines are consumed
+    keep_lines = []  # comments / blanks preserved; UNCONSUMED domains also stay (cap!)
 
     for line in raw:
         dom = norm(line)
@@ -96,6 +98,9 @@ def main():
         if dom in have:
             print(f"{dom}: already covered/queued, skip")
             processed.append(dom)
+            continue
+        if queued >= cap:
+            keep_lines.append(dom)    # over this cycle's cap — stays queued for next week
             continue
 
         rec = {

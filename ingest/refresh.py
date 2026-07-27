@@ -212,13 +212,24 @@ def main():
                  "where data/pages/ exists and commit the manifest first.")
 
     print(f"snapshot clock: checking {len(recs)} records against {sum(len(v) for v in man.values())} "
-          f"page signatures (refill cap {REFILL_CAP}/cycle)\n")
+          f"page signatures (refill cap {REFILL_CAP}/cycle, 12 domains in parallel)\n")
     all_events, need = [], []
     fresh = changed_total = deferred = unreachable_only = baselined_total = 0
 
-    for rec in recs:
+    # Politeness is per-host: within a record its pages fetch sequentially (0.2s apart),
+    # but different records are different vendors — run 12 at once. Results are applied
+    # in the original record order below, so the refill cap stays deterministic.
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+        futures = [pool.submit(check_record, rec, man.get(rec["domain"], {})) for rec in recs]
+        results = []
+        for n, fut in enumerate(futures, 1):
+            results.append(fut.result())
+            if n % 200 == 0:
+                print(f"  … {n}/{len(recs)} records checked", flush=True)
+
+    for rec, res in zip(recs, results):
         dom = rec["domain"]
-        res = check_record(rec, man.get(dom, {}))
         all_events += res["events"]
         baselined_total += res["baselined"]
 

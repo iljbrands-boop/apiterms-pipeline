@@ -14,6 +14,9 @@ cd "$(dirname "$0")/.."
 # How many freshly-submitted domains to onboard per cycle (bounds cost: ~$0.09/domain).
 SUB_CAP="${SUB_CAP:-25}"
 
+echo "[0a/7] discover — scan the week's launches for new APIs, queue keepers (\$0, never fatal)"
+python3 ingest/discover.py || echo "     discovery failed (non-fatal) — continuing"
+
 echo "[0/7] submissions — onboard community-added domains (data/submissions.txt) into the queue"
 QUEUED=0
 if SUB_OUT=$(python3 ingest/submissions.py); then

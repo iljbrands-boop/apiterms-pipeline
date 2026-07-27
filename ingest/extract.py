@@ -83,6 +83,33 @@ def get(url: str, timeout=15):
         return None, None, None
 
 
+FIRECRAWL_KEY = os.environ.get("FIRECRAWL_API_KEY")
+FIRECRAWL_PER_DOMAIN = 3   # credit guard: max rendered fetches per domain per crawl
+
+
+def firecrawl_get(url: str):
+    """Rendered fetch via Firecrawl for pages that serve an empty JS shell to plain
+    HTTP . This is JS RENDERING — what any browser does — not
+    bot-wall circumvention: we only call it for pages that already answered 200 but
+    carried no server-side text. Disclosed on /methodology. Env-gated: without
+    FIRECRAWL_API_KEY the crawler behaves exactly as before."""
+    body = json.dumps({"url": url, "formats": ["markdown"],
+                       "onlyMainContent": True, "timeout": 30000}).encode()
+    req = urllib.request.Request(
+        "https://api.firecrawl.dev/v1/scrape", data=body, method="POST",
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {FIRECRAWL_KEY}"})
+    try:
+        with urllib.request.urlopen(req, timeout=45) as r:
+            payload = json.loads(r.read())
+    except Exception:
+        return None
+    if not payload.get("success"):
+        return None
+    md = (payload.get("data") or {}).get("markdown") or ""
+    return md[:MAX_TEXT_PER_PAGE] if len(md.strip()) >= 200 else None
+
+
 def llms_txt_links(text: str, base: str) -> list:
     """Pull markdown links out of an llms.txt whose titles look terms-relevant."""
     out = []
@@ -97,6 +124,7 @@ def crawl_domain(rec: dict) -> dict:
     outdir = PAGES / dom
     outdir.mkdir(parents=True, exist_ok=True)
     fetched = {}
+    fc_used = 0
 
     urls = []
     if rec.get("llms_txt"):
@@ -108,10 +136,24 @@ def crawl_domain(rec: dict) -> dict:
             break
         final_url, ctype, body = get(url)
         if body is None:
+            # plain fetch refused/failed (typically a bot-manager 403 to our UA): fetch
+            # the PUBLIC page through the rendering service instead. Trust line held:
+            # public docs/pricing only, never logins/paywalls, capped, disclosed.
+            if FIRECRAWL_KEY and not url.endswith("llms.txt") and fc_used < FIRECRAWL_PER_DOMAIN:
+                fc_used += 1
+                rendered = firecrawl_get(url)
+                if rendered:
+                    fetched[url] = rendered
             continue
         is_llms = url.endswith("llms.txt")
         text = body[:MAX_TEXT_PER_PAGE] if is_llms or "text/plain" in (ctype or "") else strip_html(body)
-        if len(text.strip()) < 200:  # empty shells / JS-only pages
+        if len(text.strip()) < 200:  # empty shell / JS-only page
+            # fallback: rendered fetch (Firecrawl), capped per domain to guard credits
+            if FIRECRAWL_KEY and not is_llms and fc_used < FIRECRAWL_PER_DOMAIN:
+                fc_used += 1
+                rendered = firecrawl_get(url)
+                if rendered:
+                    fetched[final_url or url] = rendered
             continue
         fetched[final_url or url] = text
         if is_llms:

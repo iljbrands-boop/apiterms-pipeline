@@ -38,6 +38,8 @@ DIST = ROOT / "site" / "dist"
 # Baseline month the corpus was first fully verified — the "tracking since" anchor.
 # Copy stays cadence-neutral ("re-verified on a schedule") until the weekly cron runs.
 BASELINE_LABEL = "July 2026"
+# Filled by main() before any page renders — drives the footer's operational line.
+STATS = {"n": 0, "last": ""}
 SIG_LABEL = {"pricing": "Pricing", "limits": "Rate limits", "auth": "Auth",
              "spec": "OpenAPI spec", "mcp": "MCP server", "info": "Details"}
 # Every record gets a page (the site IS the dataset; "not documented" is data —
@@ -51,6 +53,15 @@ FIELD_LABELS = {"base_url": "Base URL", "auth_type": "Auth", "free_tier": "Free 
                 "pricing_model": "Pricing model", "pricing_details": "Pricing",
                 "rate_limits": "Rate limits", "openapi_spec_url": "OpenAPI spec",
                 "mcp_server": "MCP server"}
+# Human display for enum-ish values — internal strings (api_key, usage_based) never
+# render raw in the UI (review directive 2026-07-16); the raw value stays in the JSON.
+HUMAN = {"api_key": "API key", "bearer_token": "Bearer token", "oauth2": "OAuth 2.0",
+         "basic": "Basic auth", "none": "no auth", "usage_based": "usage based"}
+GITHUB = "https://github.com/iljbrands-boop/apiterms-pipeline"
+
+
+def hum(val):
+    return HUMAN.get(val, str(val).replace("_", " ")) if val else val
 # No email addresses anywhere on the site (site policy): corrections,
 # claims and sponsor contact all go through Formspree forms (/correct/, /sponsors/).
 SPONSORS = ROOT / "site" / "sponsors.json"
@@ -61,7 +72,8 @@ def load_sponsors():
         s = json.loads(SPONSORS.read_text())
     else:
         s = {}
-    return {"categories": s.get("categories", {}), "featured": set(s.get("featured", []))}
+    return {"categories": s.get("categories", {}), "featured": set(s.get("featured", [])),
+            "main": s.get("main")}  # main partner: {"name","url","tagline"} — homepage slot
 
 
 # site/config.json: third-party service IDs. Empty string = feature not injected.
@@ -74,8 +86,8 @@ CONFIG = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
 CRISP_ID = CONFIG.get("crisp_website_id", "")
 FORMSPREE_PROJECT = CONFIG.get("formspree_project_id", "")
 
-# Booking link for licensing / sponsor / partnership conversations. Swap in your own
-# booking URL. Surfaced in the footer and on /dataset/ + /sponsors/ only —
+# Booking link for licensing / sponsor / partnership conversations. Swap in your
+# real Cal.com URL. Surfaced in the footer and on /dataset/ + /sponsors/ only —
 # where a human conversation actually makes sense — never on record pages.
 CAL_LINK = "https://cal.com/apiterms"
 
@@ -200,13 +212,14 @@ def logo(dom: str, big=False) -> str:
 # ---------------------------------------------------------------- templates
 
 CSS = """
-:root{--void:#f7f8fa;--panel:#ffffff;--panel2:#fbfcfd;--line:#eaedf2;--lineh:#dce0e7;
+:root{--void:#f7f8fa;--panel:#ffffff;--panel2:#f2f4f8;--line:#eaedf2;--lineh:#dce0e7;
 --ink:#0c1424;--body:#4a5568;--dim:#8b95a3;--ghost:#aab2be;--blue:#1f5eff;--bluehot:#1a53d8;
 --bluedim:#d7e3ff;--add:#00a368;--adddim:rgba(0,163,104,.10);--warn:#b8760a;
 --shadow:0 1px 2px rgba(12,20,36,.04),0 4px 14px rgba(12,20,36,.05);
 --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--void);
 color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
 a{color:var(--bluehot);text-decoration:none}a:hover{text-decoration:underline}
@@ -215,25 +228,34 @@ a{color:var(--bluehot);text-decoration:none}a:hover{text-decoration:underline}
 .mono{font-family:var(--mono)}
 .nav{display:flex;align-items:center;gap:18px;padding:14px 0;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap}
-.brand .mark{color:#fff;background:var(--blue);padding:4px 8px;font-size:11.5px}
-.topnav{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+.brand .mark{color:#fff;background:var(--blue);padding:4px 8px;font-size:11.5px;border-radius:5px}
+.topnav{margin-left:auto;display:flex;align-items:center;gap:16px;font-size:13px;font-weight:500;line-height:1}
+.topnav a{white-space:nowrap}
+@media(max-width:700px){.nav{flex-wrap:wrap}.topnav{margin-left:0;width:100%;overflow-x:auto;gap:14px;padding-bottom:4px;-webkit-overflow-scrolling:touch}}
 .topnav a{color:var(--body)}
-.topnav a.nav-add{color:var(--add);border:1px solid var(--adddim);padding:2px 8px;border-radius:2px}
+.topnav a.nav-add{color:var(--add);border:1px solid rgba(0,163,104,.35);padding:5px 10px;border-radius:6px;line-height:1}
 .topnav a.nav-add:hover{background:var(--adddim);text-decoration:none}
+.topnav a.nav-sp{color:var(--bluehot);border:1px solid var(--bluedim);background:rgba(31,94,255,.06);padding:5px 10px;border-radius:6px;line-height:1}
+.topnav a.nav-sp:hover{background:rgba(31,94,255,.12);text-decoration:none}
+.ghstar{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--lineh);background:var(--panel);
+border-radius:6px;padding:4px 10px;color:var(--body)!important;font-size:12.5px;font-weight:600;white-space:nowrap;line-height:1}
+.ghstar:hover{border-color:var(--ghost);text-decoration:none!important}
+.ghstar svg{width:14px;height:14px;fill:var(--ink);flex:none}
+.ghstar .cnt{border-left:1px solid var(--line);padding-left:8px;margin-left:2px;color:var(--ink);font-variant-numeric:tabular-nums}
 .crumbs{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin:20px 0;letter-spacing:.04em;text-transform:uppercase}
 .crumbs a{color:var(--dim)}.crumbs span{color:var(--ghost);margin:0 8px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
-h1{font-family:var(--mono);font-weight:700;letter-spacing:-.01em}
+h1{font-family:var(--sans);font-weight:750;letter-spacing:-.02em}
 .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--bluehot);margin-bottom:10px}
 .kicker:before{content:"// "}
-.chip{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border:1px solid var(--lineh);color:var(--body);white-space:nowrap;display:inline-block}
+.chip{font-size:12.5px;font-weight:500;padding:4px 11px;border:1px solid var(--lineh);color:var(--body);white-space:nowrap;display:inline-block;border-radius:6px}
 .chip.cat{color:var(--bluehot);border-color:var(--bluedim);background:rgba(31,94,255,.08)}
-.badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--add);background:var(--adddim);border:1px solid rgba(0,224,139,.3);padding:4px 11px;text-transform:uppercase}
+.badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--add);background:var(--adddim);border:1px solid rgba(0,163,104,.35);padding:4px 11px;text-transform:uppercase;border-radius:6px}
 .dot{width:6px;height:6px;background:var(--add)}
 .conf{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--body)}
 .conf .bars{display:inline-flex;gap:2px}.conf .bars i{width:4px;height:11px;background:var(--lineh)}
 .conf.high .bars i{background:var(--add)}.conf.medium .bars i:nth-child(-n+2){background:var(--warn)}
-.field{display:grid;grid-template-columns:150px 1fr auto;gap:16px;align-items:start;padding:14px 26px;border-top:1px solid var(--line)}
+.field{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:16px;align-items:start;padding:14px 26px;border-top:1px solid var(--line)}
 .field:hover{background:var(--panel2)}
 .field .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding-top:3px}
 .field .v{font-family:var(--mono);font-size:13px;color:var(--ink);line-height:1.55;word-break:break-word}
@@ -241,16 +263,19 @@ h1{font-family:var(--mono);font-weight:700;letter-spacing:-.01em}
 .field.absent .v{color:var(--ghost);font-style:italic}
 .src{font-family:var(--mono);font-size:11px;color:var(--warn);white-space:nowrap;padding-top:3px}
 .src.none{color:var(--ghost)}
-.tag-null{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--ghost);border:1px solid var(--line);padding:1px 7px;margin-left:4px;font-style:normal}
-@media(max-width:560px){.field{grid-template-columns:1fr;gap:5px}}
+.tag-null{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--ghost);border:1px solid var(--line);padding:1px 7px;margin-left:4px;font-style:normal;border-radius:4px}
+@media(max-width:560px){.field{grid-template-columns:minmax(0,1fr);gap:5px;padding:14px 18px}}
 table{border-collapse:collapse;width:100%;font-size:12.5px}
-th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);text-align:left;font-weight:600;padding:11px 14px;border-bottom:1px solid var(--lineh);background:var(--void)}
-td{padding:10px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);color:var(--body);vertical-align:middle}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);text-align:left;font-weight:600;padding:11px 9px;border-bottom:1px solid var(--lineh);background:var(--void);white-space:nowrap}
+td{padding:10px 9px;border-bottom:1px solid var(--line);font-family:var(--mono);color:var(--body);vertical-align:middle;white-space:nowrap}
+td.name{max-width:230px;overflow:hidden;text-overflow:ellipsis}
+td.name .dom{display:block;color:var(--ghost);font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+th:first-child,td:first-child{padding-left:14px}th:last-child,td:last-child{padding-right:14px}
 tr:last-child td{border-bottom:none}tr:hover td{background:var(--panel2)}
 td.name a{font-weight:600;color:var(--ink)}
-.pill{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--lineh);color:var(--body)}
-.pill.ok{color:var(--add);border-color:rgba(0,224,139,.35);background:var(--adddim)}
-.pill.lo{color:var(--warn);border-color:rgba(255,180,84,.3)}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--lineh);color:var(--body);border-radius:5px}
+.pill.ok{color:var(--add);border-color:rgba(0,163,104,.35);background:var(--adddim)}
+.pill.lo{color:var(--warn);border-color:rgba(184,118,10,.35)}
 .yes{color:var(--add)}.no{color:var(--ghost)}
 .table-wrap{overflow-x:auto;border:1px solid var(--line);background:var(--panel);border-radius:12px;box-shadow:var(--shadow)}
 .grid-stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--panel);margin:26px 0;border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
@@ -265,12 +290,12 @@ td.name a{font-weight:600;color:var(--ink)}
 .card ul{margin:0;padding:0}
 .card li{list-style:none;display:flex;gap:10px;margin-bottom:11px;font-size:13.5px;color:var(--body)}
 .card li b{color:var(--ink)}.card .ck{color:var(--add);font-family:var(--mono);flex:none}
-.btn{display:block;text-align:center;font-family:var(--mono);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border:1px solid var(--lineh);padding:10px 12px;width:100%}
+.btn{display:block;text-align:center;font-weight:600;font-size:13.5px;color:var(--ink);border:1px solid var(--lineh);padding:10px 12px;width:100%;border-radius:8px}
 .btn:hover{border-color:var(--bluehot);color:var(--bluehot);text-decoration:none}
-.code{font-family:var(--mono);font-size:12px;background:var(--void);border:1px solid var(--line);padding:12px 13px;color:var(--body);overflow-x:auto;line-height:1.7}
+.code{font-family:var(--mono);font-size:12px;background:var(--void);border:1px solid var(--line);padding:12px 13px;color:var(--body);overflow-x:auto;line-height:1.7;border-radius:8px}
 .code .c{color:var(--ghost)}.code .m{color:var(--bluehot)}.code .s{color:var(--add)}
-.cols{display:grid;grid-template-columns:1fr 320px;gap:22px;align-items:start}
-@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
+@media(max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}}
 .catlist{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 26px}
 .shell:has(.home){max-width:1240px}
 .home{display:grid;grid-template-columns:210px minmax(0,1fr);gap:34px;align-items:start;margin-top:18px}
@@ -282,8 +307,8 @@ td.name a{font-weight:600;color:var(--ink)}
 .rail-link:hover{background:var(--panel);color:var(--ink);text-decoration:none}
 .rail-link.active{color:var(--ink);background:var(--panel);font-weight:600}
 .rail-link span{color:var(--ghost);font-size:11px;font-variant-numeric:tabular-nums}
-.rail-add{display:block;margin:18px 0 8px;text-align:center;color:var(--add);border:1px solid var(--adddim);background:var(--adddim);padding:8px;border-radius:5px;font-size:12px;letter-spacing:.02em}
-.rail-add:hover{text-decoration:none;filter:brightness(1.2)}
+.rail-add{display:block;margin:18px 0 8px;text-align:center;color:var(--add);border:1px solid rgba(0,163,104,.3);background:var(--adddim);padding:8px;border-radius:5px;font-size:12px;letter-spacing:.02em}
+.rail-add:hover{text-decoration:none;background:rgba(0,163,104,.16)}
 .home-h1{font-family:var(--sans);font-size:clamp(22px,2.7vw,30px);line-height:1.2;letter-spacing:-.02em;margin:0 0 10px;max-width:20em;font-weight:750}
 .home-sub{color:var(--body);font-size:14px;line-height:1.55;margin:0 0 15px;max-width:62ch}
 .home-sub b{color:var(--ink)}
@@ -295,27 +320,27 @@ td.name a{font-weight:600;color:var(--ink)}
   .rail{display:none}
   .mobcats{display:flex;margin:12px 0 2px}
 }
-.add{color:var(--add)}.del{color:var(--del,#ff5c5c);text-decoration:line-through;text-decoration-thickness:1px}
-.chip.sig{color:var(--warn);border-color:rgba(255,180,84,.3);background:rgba(255,180,84,.07)}
+.add{color:var(--add)}.del{color:var(--del,#c92a2a);text-decoration:line-through;text-decoration-thickness:1px}
+.chip.sig{color:var(--warn);border-color:rgba(184,118,10,.3);background:rgba(184,118,10,.07)}
 .chg-row{border-top:1px solid var(--line);padding:12px 0}
 .chg-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chg-dom{font-family:var(--mono);font-weight:600;color:var(--ink)}
 .chg-date{margin-left:auto;color:var(--dim);font-size:11.5px}
 .chg-diff{font-size:12.5px;margin-top:6px;line-height:1.7;word-break:break-word}
 .chg-diff .src{margin-left:8px}
-.ticker{border:1px solid var(--lineh);background:var(--panel);padding:12px 16px;margin:18px 0 0;font-family:var(--mono);font-size:12.5px;display:flex;align-items:center;gap:12px;overflow-x:auto;white-space:nowrap}
+.ticker{border:1px solid var(--line);background:var(--panel);border-radius:10px;box-shadow:var(--shadow);padding:12px 16px;margin:18px 0 0;font-family:var(--mono);font-size:12.5px;display:flex;align-items:center;gap:12px;overflow-x:auto;white-space:nowrap}
 .ticker .lb{color:var(--add);flex:none;letter-spacing:.06em;text-transform:uppercase;font-size:10.5px}
 .ticker a{color:var(--body)}.ticker .sep{color:var(--ghost)}
 footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.03em;line-height:1.9}
 footer a{color:var(--dim)}
 .sub{color:var(--body);max-width:44em}
 .fld{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--void);
-border:1px solid var(--lineh);padding:10px 12px;width:100%;box-sizing:border-box}
+border:1px solid var(--lineh);padding:10px 12px;width:100%;box-sizing:border-box;border-radius:8px}
 .fld:focus{outline:none;border-color:var(--bluehot)}
 textarea.fld{min-height:90px;resize:vertical}
-.add-note{font-family:var(--mono);font-size:12.5px;line-height:1.5;padding:10px 12px;margin:0 0 12px;border:1px solid var(--lineh)}
-.add-note.ok{color:var(--add);border-color:var(--adddim);background:var(--adddim)}
-.add-note.err{color:var(--warn);border-color:rgba(255,180,84,.28);background:rgba(255,180,84,.10)}
+.add-note{font-family:var(--mono);font-size:12.5px;line-height:1.5;padding:10px 12px;margin:0 0 12px;border:1px solid var(--lineh);border-radius:8px}
+.add-note.ok{color:var(--add);border-color:rgba(0,163,104,.3);background:var(--adddim)}
+.add-note.err{color:var(--warn);border-color:rgba(184,118,10,.3);background:rgba(184,118,10,.08)}
 .btn.solid{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
 .btn.solid:hover{background:var(--bluehot);color:#fff;text-decoration:none}
 .caprow{display:flex;gap:10px;margin-top:14px}
@@ -328,7 +353,7 @@ textarea.fld{min-height:90px;resize:vertical}
 font-family:var(--mono);font-size:13.5px;padding:12px 15px;outline:none;border-radius:9px;box-shadow:var(--shadow)}
 .search:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--bluedim)}
 .search::placeholder{color:var(--ghost)}
-.kbd{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--line);padding:2px 6px}
+.kbd{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--line);padding:2px 6px;border-radius:4px}
 .fchip{cursor:pointer;user-select:none}
 .fchip.on{color:var(--bluehot);border-color:var(--bluehot);background:rgba(31,94,255,.12)}
 .nshow{font-family:var(--mono);font-size:11px;color:var(--dim)}
@@ -336,7 +361,7 @@ font-family:var(--mono);font-size:13.5px;padding:12px 15px;outline:none;border-r
 font-family:var(--mono);font-size:12.5px;color:var(--body)}
 .sponsorbar a b{color:var(--ink)}
 .sponsorbar.open{border-style:dashed;color:var(--dim)}
-.pill.sp{color:var(--warn);border-color:rgba(255,180,84,.3);flex:none}
+.pill.sp{color:var(--warn);border-color:rgba(184,118,10,.35);flex:none}
 .pill.feat{color:var(--bluehot);border-color:var(--bluedim);background:rgba(31,94,255,.08)}
 .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0 8px}
 @media(max-width:760px){.quotes{grid-template-columns:1fr}}
@@ -345,6 +370,52 @@ font-family:var(--mono);font-size:12.5px;color:var(--body)}
 .quote p:before{content:"“";color:var(--blue);font-family:var(--mono);font-size:20px;margin-right:2px}
 .quote .who{margin-top:auto;font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--dim)}
 .quote .who b{display:block;color:var(--body);font-size:12px;letter-spacing:.02em}
+.btn.inline{display:inline-block;width:auto;padding:11px 20px}
+.cta-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0 10px}
+.cta-sub{font-family:var(--mono);font-size:12px;color:var(--dim);margin:0 0 4px}
+.cta-sub a{color:var(--body)}
+.trust{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin:10px 0 0;letter-spacing:.02em}
+.trust b{color:var(--body)}
+td .nd{color:var(--ghost);font-size:10px;font-style:normal;letter-spacing:.04em}
+td .okv{color:var(--add)}
+td.dt{color:var(--dim);font-size:11px;white-space:nowrap}
+.fchip.chgc{color:var(--warn);border-color:rgba(184,118,10,.4);background:rgba(184,118,10,.07)}
+.fchip.chgc.on{color:#fff;background:var(--warn);border-color:var(--warn)}
+.sect{margin:34px 0 0}
+.sect h2{font-size:19px;letter-spacing:-.01em;margin:6px 0 10px;font-weight:700}
+.sect p{color:var(--body);font-size:14px;max-width:66ch;margin:0 0 12px}
+.chg-panel{padding:6px 20px 14px;margin-top:26px}
+.chg-panel .chg-row:first-of-type{border-top:none}
+.chg-empty{padding:18px 0 8px;font-size:13.5px;color:var(--body);max-width:60ch}
+.chg-empty .lb{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--add);margin-bottom:8px}
+#apitable.collapsed .xtra{display:none}
+.showall{display:block;width:100%;text-align:center;font-size:13px;font-weight:600;color:var(--bluehot);
+background:var(--panel);border:none;border-top:1px solid var(--line);padding:13px;cursor:pointer;font-family:var(--sans)}
+.showall:hover{background:var(--panel2)}
+.statmini{font-family:var(--mono);font-size:12.5px;color:var(--dim);margin:14px 0 0}
+.statmini b{color:var(--ink);font-variant-numeric:tabular-nums}
+.findrow{display:flex;gap:26px;flex-wrap:wrap;font-size:14px;color:var(--body);margin:10px 0 12px}
+.findrow b{font-family:var(--mono);font-size:20px;color:var(--ink);display:block;font-variant-numeric:tabular-nums}
+.linklike{background:none;border:none;padding:4px 2px;color:var(--body);font-size:13.5px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.linklike:hover{color:var(--ink)}
+.seclabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+.why2col{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:32px;align-items:start}
+@media(max-width:820px){.why2col{grid-template-columns:1fr}}
+.fieldcard{padding:16px 18px}
+.fieldcard .fc-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:10px}
+.fieldcard .fc-r{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;padding:7px 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
+.fieldcard .fc-r .k{color:var(--dim);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding-top:2px}
+.fieldcard .fc-r .v{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.osscard{padding:22px 24px;margin-top:38px}
+.osscard h2{font-size:17px;margin:4px 0 8px}
+.osscard p{color:var(--body);font-size:13.5px;max-width:60ch;margin:0 0 12px}
+.oss-facts{display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.foot-cols{display:flex;justify-content:space-between;gap:28px;flex-wrap:wrap}
+.foot-cols .fc-l b{color:var(--body)}
+.foot-cols .fc-r{text-align:right}
+@media(max-width:640px){.foot-cols .fc-r{text-align:left}}
+.foot-meta{margin-top:16px;padding-top:10px;border-top:1px solid var(--line);color:var(--ghost);font-size:11.5px}
+.foot-meta a{color:var(--ghost)}
 """
 
 
@@ -357,10 +428,57 @@ FAVICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 """
 
 
+# chat:show forces the bubble even when no operator is online (the Crisp dashboard's
+# hide-when-unavailable behavior was hiding it — diagnosed live 2026-07-16); offline
+# messages still reach the inbox + email.
 CRISP_SNIPPET = ('<script>window.$crisp=[];window.CRISP_WEBSITE_ID="%s";'
+                 'window.$crisp.push(["do","chat:show"]);'
                  '(function(){var d=document,s=d.createElement("script");'
                  's.src="https://client.crisp.chat/l.js";s.async=1;'
                  'd.getElementsByTagName("head")[0].appendChild(s);})();</script>')
+
+# GitHub star badge in the nav — octocat mark + live star count. Count comes from the
+# public GitHub API client-side (unauthenticated, per-visitor: well inside rate limits),
+# cached in localStorage for an hour, and hidden entirely at 0 or on fetch failure —
+# the badge never shows a fake or stale-zero number.
+GH_MARK = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 '
+           '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53'
+           '-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 '
+           '1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 '
+           '0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 '
+           '2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 '
+           '1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 '
+           '2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>')
+# Formspree forms submit via fetch and confirm inline — visitors NEVER get bounced to
+# Formspree's hosted thank-you page (same UX as /add/).
+# Per-form success copy via data-ok on the <form>.
+FORMS_JS = """<script>(function(){
+[].forEach.call(document.querySelectorAll('form[action*="formspree.io"]'),function(f){
+  f.addEventListener("submit",function(ev){
+    ev.preventDefault();
+    var btn=f.querySelector('[type=submit]'),
+        box=f.parentNode.querySelector(".add-note");
+    if(!box){box=document.createElement("div");box.className="add-note";box.setAttribute("role","status");
+      f.parentNode.insertBefore(box,f);}
+    if(btn)btn.disabled=true;
+    fetch(f.action,{method:"POST",body:new FormData(f),headers:{Accept:"application/json"}})
+    .then(function(r){if(!r.ok)throw 0;
+      box.textContent=f.dataset.ok||"Thanks — sent. We read every message and reply by email.";
+      box.className="add-note ok";f.style.display="none";})
+    .catch(function(){if(btn)btn.disabled=false;
+      box.textContent="Couldn't send just now — please try again in a moment.";
+      box.className="add-note err";});
+  });
+});})();</script>"""
+
+GH_STAR_JS = """<script>(function(){var e=document.getElementById("ghcnt");if(!e)return;
+function show(n){if(n>0){e.textContent=n>=1000?(n/1000).toFixed(1).replace(/\\.0$/,"")+"k":n;e.hidden=false}}
+var c=null;try{c=JSON.parse(localStorage.ghstars||"null")}catch(_){}
+if(c&&Date.now()-c.t<36e5){show(c.n);return}
+fetch("https://api.github.com/repos/iljbrands-boop/apiterms-pipeline")
+.then(function(r){return r.json()}).then(function(d){var n=d.stargazers_count||0;
+try{localStorage.ghstars=JSON.stringify({n:n,t:Date.now()})}catch(_){}show(n)})
+.catch(function(){});})();</script>"""
 
 
 def page(title, desc, canonical, body_html, base, jsonld=None, noindex=False):
@@ -384,16 +502,21 @@ def page(title, desc, canonical, body_html, base, jsonld=None, noindex=False):
 <div class="shell">
 <div class="nav">
   <a class="brand" href="/"><span class="mark">/API</span>&nbsp;TERMS</a>
-  <nav class="topnav"><a href="/categories/">Categories</a><a href="/changes/">Changes</a><a href="/report/">Report</a><a href="/dataset/">Dataset</a><a href="/add/" class="nav-add">+ Add an API</a><a href="/sponsors/">Sponsor</a></nav>
+  <nav class="topnav"><a href="/#browse">Browse</a><a href="/changes/">Changes</a><a href="/report/">Findings</a><a href="/dataset/">Dataset</a><a href="/methodology/">Methodology</a><a class="ghstar" href="{GITHUB}" target="_blank" rel="noopener" title="Star the open-source pipeline on GitHub">{GH_MARK}Star<span class="cnt" id="ghcnt" hidden></span></a><a href="/add/" class="nav-add">+ Add an API</a><a href="/sponsors/" class="nav-sp">Sponsor</a></nav>
 </div>
 {body_html}
 <footer>
-PUBLIC API TERMS, STRUCTURED AND FRESH — AUTH · PRICING · RATE LIMITS · SPEC · MCP<br>
-Per-field evidence URLs, verified on a schedule. apis.guru froze in 2023 — rebuilt for agents.<br>
-<a href="/methodology/">Methodology</a> · <a href="/add/">Add an API</a> · <a href="/changes/">Changes</a> · <a href="/correct/">Corrections</a> · <a href="/dataset/">Dataset</a> · <a href="/sponsors/">Become a sponsor</a> · <a href="{CAL_LINK}" target="_blank" rel="noopener">Book a call</a> · <a href="/llms.txt">llms.txt</a>
+<div class="foot-cols">
+  <div class="fc-l"><b>API Terms</b><br>The sourced record of public API terms and how they change.</div>
+  <div class="fc-r"><a href="/#browse">Browse</a> · <a href="/changes/">Changes</a> · <a href="/report/">Findings</a> · <a href="/dataset/">Dataset</a> · <a href="/methodology/">Methodology</a><br>
+  <a href="{GITHUB}" target="_blank" rel="noopener">Open source</a> · <a href="/add/">Add an API</a> · <a href="/correct/">Report an error</a> · <a href="/sponsors/">Sponsor</a></div>
+</div>
+<div class="foot-meta">{STATS['n']:,} APIs tracked · Last full check {STATS['last']} · <a href="/llms.txt">llms.txt</a></div>
 </footer>
 </div>
 <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
+{GH_STAR_JS}
+{FORMS_JS}
 {crisp}
 </body>
 </html>"""
@@ -407,20 +530,23 @@ def field_row(rec, f):
                 f'<div class="v">not documented <span class="tag-null">null</span></div>'
                 f'<span class="src none">no source</span></div>')
     hl = ' class="hl"' if f in ("base_url", "auth_type", "pricing_model") else ""
+    disp = hum(val) if f in ("auth_type", "pricing_model") else str(val)
     src_html = (f'<a class="src" href="{escape(src)}" rel="nofollow">{escape(host(src))} ↗</a>'
                 if src else '<span class="src none">unevidenced</span>')
     return (f'<div class="field"><div class="k">{label}</div>'
-            f'<div class="v"><span{hl}>{escape(str(val))}</span></div>{src_html}</div>')
+            f'<div class="v"><span{hl}>{escape(disp)}</span></div>{src_html}</div>')
 
 
 def summary_sentence(rec):
     """Answer-engine phrasing: the sentence an LLM should quote."""
     name = rec.get("name") or rec["domain"]
     bits = []
-    if v(rec, "auth_type"):
-        bits.append(f"uses {v(rec, 'auth_type').replace('_', ' ')} authentication")
+    if v(rec, "auth_type") == "none":
+        bits.append("requires no authentication")
+    elif v(rec, "auth_type"):
+        bits.append(f"uses {hum(v(rec, 'auth_type'))} authentication")
     if v(rec, "pricing_model"):
-        bits.append(f"has {v(rec, 'pricing_model').replace('_', ' ')} pricing")
+        bits.append(f"has {hum(v(rec, 'pricing_model'))} pricing")
     if v(rec, "free_tier"):
         bits.append(f"offers a free tier ({v(rec, 'free_tier')})")
     if v(rec, "rate_limits"):
@@ -547,35 +673,51 @@ def record_page(rec, base, history=None):
                 noindex=filled(rec) < INDEX_MIN_FIELDS), url
 
 
-def table_rows(recs, base, featured=frozenset(), logo_limit=None):
+def tri(val):
+    """Tri-state cell: documented -> ✓, else an explicit 'n/d' (not documented).
+    'n/d' is a finding, not an error — it must not look like a broken cell."""
+    return '<span class="okv">✓</span>' if val else '<span class="nd" title="not documented">n/d</span>'
+
+
+def table_rows(recs, base, featured=frozenset(), logo_limit=None, changed=frozenset(),
+               xtra_after=None):
     """logo_limit caps how many rows get a favicon <img> — 1,250 external images
-    on one page wedges slow renderers (observed in preview, 2026-07-13)."""
+    on one page wedges slow renderers (observed in preview, 2026-07-13).
+    changed = domains with a recent change-ledger event (drives the 'changed
+    recently' filter chip on the homepage). xtra_after=N tags rows past N with
+    class=xtra so the homepage can collapse the table to a first block; search
+    and filters auto-expand."""
     out = []
     for i, r in enumerate(recs):
-        conf = r.get("confidence", "low")
-        pill = "ok" if conf == "high" else ("lo" if conf == "low" else "")
+        cls = ' class="xtra"' if (xtra_after is not None and i >= xtra_after) else ""
         feat = ' <span class="pill feat">featured</span>' if r["domain"] in featured else ""
         s = " ".join(filter(None, [r.get("name"), r["domain"], r["_category"],
-                                   v(r, "auth_type"), v(r, "pricing_model")])).lower()
+                                   hum(v(r, "auth_type")), hum(v(r, "pricing_model"))])).lower()
         flags = (f' data-s="{escape(s)}" data-free="{1 if v(r, "free_tier") else 0}"'
+                 f' data-noauth="{1 if v(r, "auth_type") == "none" else 0}"'
+                 f' data-rl="{1 if v(r, "rate_limits") else 0}"'
                  f' data-mcp="{1 if v(r, "mcp_server") else 0}"'
                  f' data-spec="{1 if v(r, "openapi_spec_url") else 0}"'
+                 f' data-chg="{1 if r["domain"] in changed else 0}"'
                  f' data-hi="{1 if r.get("confidence") == "high" else 0}"')
         lg = logo(r["domain"]) if (logo_limit is None or i < logo_limit) else ""
         out.append(
-            f'<tr{flags}><td class="name">{lg}<a href="/api/{r["domain"]}/">{escape(r.get("name") or r["domain"])}</a>'
-            f' <span style="color:var(--ghost);font-size:11px">{escape(r["domain"])}</span>{feat}</td>'
+            f'<tr{cls}{flags}><td class="name">{lg}<a href="/api/{r["domain"]}/">{escape(r.get("name") or r["domain"])}</a>{feat}'
+            f'<span class="dom">{escape(r["domain"])}</span></td>'
             f'<td>{escape(r["_category"])}</td>'
-            f'<td>{escape(v(r, "auth_type") or "—")}</td>'
-            f'<td>{escape(v(r, "pricing_model") or "—")}</td>'
-            f'<td class="{"yes" if v(r, "mcp_server") else "no"}">{"●" if v(r, "mcp_server") else "—"}</td>'
-            f'<td class="{"yes" if v(r, "free_tier") else "no"}">{"●" if v(r, "free_tier") else "—"}</td>'
-            f'<td><span class="pill {pill}">{conf}</span></td></tr>')
+            f'<td>{escape(hum(v(r, "auth_type")) or "")}{"" if v(r, "auth_type") else tri(None)}</td>'
+            f'<td>{escape(hum(v(r, "pricing_model")) or "")}{"" if v(r, "pricing_model") else tri(None)}</td>'
+            f'<td>{tri(v(r, "free_tier"))}</td>'
+            f'<td>{tri(v(r, "rate_limits"))}</td>'
+            f'<td>{tri(v(r, "openapi_spec_url"))}</td>'
+            f'<td>{tri(v(r, "mcp_server"))}</td>'
+            f'<td class="dt">{escape(r.get("last_verified") or "")}</td></tr>')
     return "\n".join(out)
 
 
 TABLE_HEAD = ('<thead><tr><th>API</th><th>Category</th><th>Auth</th><th>Pricing</th>'
-              '<th>MCP</th><th>Free</th><th>Confidence</th></tr></thead>')
+              '<th>Free tier</th><th>Limits</th><th>OpenAPI</th><th>MCP</th>'
+              '<th>Checked</th></tr></thead>')
 
 
 def sponsor_bar(cat, slug, sponsors):
@@ -631,8 +773,10 @@ def testimonials_section():
 """
 
 
-def index_page(recs, cats, base, corpus_stats, changelog=None):
+def index_page(recs, cats, base, corpus_stats, changelog=None, sponsors=None,
+               pages_monitored=0, changed_recent=frozenset()):
     n = len(recs)
+    sponsors = sponsors or {"main": None}
     # Stat band: all four over the SAME denominator (the published records) so the
     # numbers are internally consistent — no "tracked vs published" mismatch on the
     # homepage. The 297 bot-walled/JS-only domains live on /methodology as a
@@ -640,47 +784,97 @@ def index_page(recs, cats, base, corpus_stats, changelog=None):
     free_pct = round(100 * sum(1 for r in recs if v(r, "free_tier")) / max(n, 1))
     mcp_pct = round(100 * sum(1 for r in recs if v(r, "mcp_server")) / max(n, 1))
     rec_spec_pct = round(100 * sum(1 for r in recs if v(r, "openapi_spec_url")) / max(n, 1))
-    # Freshness ticker — proof-of-life above the fold. Real events when they exist,
-    # honest baseline line until the first re-verification pass detects changes.
-    evs = sorted(changelog or [], key=lambda e: e["detected"], reverse=True)[:5]
-    if evs:
-        items = " <span class='sep'>·</span> ".join(
-            f'<a href="/api/{escape(e["domain"])}/">{escape(e["domain"])} '
-            f'{escape(SIG_LABEL.get(e["significance"], e["field"]).lower())} changed</a>' for e in evs)
-        ticker = (f'<div class="ticker"><span class="lb">● Latest changes</span>{items}'
-                  f'<span class="sep">·</span><a href="/changes/">all →</a></div>')
-    else:
-        ticker = (f'<div class="ticker"><span class="lb">● Tracking since {BASELINE_LABEL}</span>'
-                  f'<span style="color:var(--dim)">every record snapshotted at its source · '
-                  f'changes appear here as they\'re detected</span>'
-                  f'<span class="sep">·</span><a href="/changes/">change feed →</a></div>')
-    title = "API Terms — auth, pricing & rate limits for every public API"
-    desc = (f"{n} public APIs as structured data: auth type, pricing, free tier, rate limits, "
-            "OpenAPI spec, MCP server. A source URL on every field, re-verified on a schedule.")
-    free_n = sum(1 for r in recs if v(r, "free_tier"))
     mcp_n = sum(1 for r in recs if v(r, "mcp_server"))
     spec_n = sum(1 for r in recs if v(r, "openapi_spec_url"))
-    noauth_n = sum(1 for r in recs if v(r, "auth_type") == "none")
-    rail_cats = "\n".join(
-        f'<a class="rail-link" href="/category/{slugify(c)}/">{escape(c)}<span>{len(rs):,}</span></a>'
-        for c, rs in cats)
-    mob_cats = "".join(
-        f'<a class="chip cat" href="/category/{slugify(c)}/">{escape(c)} · {len(rs)}</a>'
-        for c, rs in cats[:10])
-    feed_capture = f"""<div class="panel card" id="feed" style="margin:26px 0 0">
-  <h3>The change feed</h3>
+    ratio = round(mcp_n / spec_n, 1) if spec_n else 0
+    last_check = max((r.get("last_verified") or "" for r in recs), default="")
+    # ONE change-tracking panel: real ledger events + explanation + RSS + email capture.
+    # Title switches from "How change tracking works" to "Recent API-term changes" the
+    # moment real events exist. NEVER example/fabricated changes (evidence rule).
+    evs = sorted(changelog or [], key=lambda e: e["detected"], reverse=True)[:3]
+    if evs:
+        chg_title = "Recent API-term changes"
+        chg_events = "\n".join(event_line(e, base) for e in evs)
+        chg_expl = ""
+    else:
+        chg_title = "How change tracking works"
+        chg_events = ""
+        chg_expl = (f'<span class="lb" style="display:block;font-family:var(--mono);font-size:10.5px;'
+                    f'letter-spacing:.1em;text-transform:uppercase;color:var(--add);margin:12px 0 8px">'
+                    f'● Tracking since {BASELINE_LABEL}</span>')
+    chg_panel = f"""<div class="panel chg-panel" id="feed">
+  <h3 style="margin:16px 0 2px;font-size:15px;font-weight:700;color:var(--ink)">{chg_title}</h3>
+  {chg_events}
+  {chg_expl}
+  <p class="sub" style="margin:10px 0 0;font-size:13.5px">Every record's source pages are re-checked
+  on a schedule. When a vendor moves a price, drops a free tier, tightens a rate limit or adds an
+  MCP server, the diff lands here — old value, new value, source.
+  <a href="/changes/">View all changes →</a> · <a href="/changes.xml">RSS</a></p>
   <div id="feed-msg" role="status"></div>
-  <p class="sub" style="margin:0;font-size:13.5px">Vendors change pricing, limits and auth
-  quietly. We re-crawl every source page and diff it. Browse it at
-  <a href="/changes/">/changes/</a> or <a href="/changes.xml">RSS</a> — or leave your email
-  and we'll send the digest as soon as it ships.</p>
-  <form class="caprow" action="/.netlify/functions/subscribe" method="POST">
+  <form class="caprow" action="/.netlify/functions/subscribe" method="POST" style="margin:12px 0 8px">
     <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
      style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
     <input class="fld" type="email" name="email" placeholder="you@company.com" required>
-    <button class="btn solid" type="submit">Join the feed</button>
+    <button class="btn solid" type="submit">Join the email feed</button>
   </form>
 </div>"""
+    main_sp = sponsors.get("main")
+    if main_sp:
+        sponsor_unit = (f'<div class="panel sponsorbar" style="margin:18px 0 0">'
+                        f'<span class="pill sp">Supported by</span>'
+                        f'<span><a href="{escape(main_sp["url"])}" rel="sponsored"><b>{escape(main_sp["name"])}</b></a>'
+                        f' — {escape(main_sp.get("tagline") or "")}</span></div>')
+    else:
+        sponsor_unit = ('<div class="panel sponsorbar open" style="margin:18px 0 0">'
+                        '<span class="pill sp">Sponsor</span>'
+                        '<span>Reach developers evaluating APIs. Sponsorship is clearly labelled '
+                        'and never influences the dataset. <a href="/sponsors/">Sponsor API Terms →</a></span></div>')
+    chg_chip = ('<span class="chip fchip chgc mf" data-f="chg" hidden>changed recently</span>'
+                if changed_recent else "")
+    title = "API Terms — public API terms, tracked over time"
+    desc = (f"Authentication, pricing, free tiers, rate limits, OpenAPI and MCP for {n:,} "
+            "public APIs. Sourced from vendor documentation and checked for changes.")
+    free_n = sum(1 for r in recs if v(r, "free_tier"))
+    noauth_n = sum(1 for r in recs if v(r, "auth_type") == "none")
+    rail_cats = "\n".join(
+        f'<a class="rail-link" href="/category/{slugify(c)}/">{escape(c)}<span>{len(rs):,}</span></a>'
+        for c, rs in cats[:10])
+    try:
+        import datetime
+        lc = datetime.date.fromisoformat(last_check)
+        last_check_h = lc.strftime("%b %-d, %Y")
+    except Exception:
+        last_check_h = last_check
+    # Homepage table order: most recently verified first (freshness is the product;
+    # it also naturally surfaces records with visible n/d states, not just the 8/8
+    # rows the completeness sort put on top). Stable sort keeps domain order in ties.
+    recs_tbl = sorted(recs, key=lambda r: r["domain"])
+    recs_tbl = sorted(recs_tbl, key=lambda r: (r.get("last_verified") or "", filled(r)),
+                      reverse=True)
+    # "Every field includes" illustration — built from a REAL record at build time
+    # (never a mocked value; the caption names the record so readers can check it).
+    ex = next((r for r in recs_tbl if v(r, "pricing_model")
+               and "pricing" in (ev(r, "pricing_model") or "")), None) \
+        or next((r for r in recs_tbl if v(r, "pricing_model") and ev(r, "pricing_model")), None)
+    fieldcard = ""
+    if ex:
+        nhist = sum(1 for e in (changelog or []) if e["domain"] == ex["domain"])
+        hist_txt = (f"{nhist} change{'s' if nhist != 1 else ''}" if nhist
+                    else f"tracked since {BASELINE_LABEL}")
+        src = ev(ex, "pricing_model")
+        src_disp = re.sub(r"^https?://(www\.)?", "", src).rstrip("/")
+        fieldcard = f"""<div class="panel fieldcard">
+      <div class="fc-h">Every field includes</div>
+      <div class="fc-r"><span class="k">Value</span><span class="v">{escape(hum(v(ex, "pricing_model")))}</span></div>
+      <div class="fc-r"><span class="k">Source</span><span class="v"><a href="{escape(src)}" rel="nofollow">{escape(src_disp)} ↗</a></span></div>
+      <div class="fc-r"><span class="k">Last checked</span><span class="v">{escape(ex.get("last_verified") or "")}</span></div>
+      <div class="fc-r"><span class="k">History</span><span class="v">{escape(hist_txt)}</span></div>
+      <p style="margin:10px 0 0;font-size:11.5px;color:var(--dim)">The live pricing field of
+      <a href="/api/{escape(ex["domain"])}/">{escape(ex.get("name") or ex["domain"])}</a> — not a mock-up.</p>
+    </div>"""
+    mob_cats = "".join(
+        f'<a class="chip cat" href="/category/{slugify(c)}/">{escape(c)} · {len(rs)}</a>'
+        for c, rs in cats[:10])
     body = f"""
 <div class="home">
   <aside class="rail">
@@ -688,56 +882,105 @@ def index_page(recs, cats, base, corpus_stats, changelog=None):
     <a class="rail-link active" href="/">All APIs<span>{n:,}</span></a>
     <div class="rail-h rail-sec">Collections</div>
     <a class="rail-link" href="/free-apis/">Free tier<span>{free_n:,}</span></a>
-    <a class="rail-link" href="/no-auth-apis/">No auth<span>{noauth_n:,}</span></a>
-    <a class="rail-link" href="/openapi-apis/">OpenAPI spec<span>{spec_n:,}</span></a>
-    <a class="rail-link" href="/mcp-apis/">MCP server<span>{mcp_n:,}</span></a>
+    <a class="rail-link" href="/no-auth-apis/">No authentication<span>{noauth_n:,}</span></a>
+    <a class="rail-link" href="/openapi-apis/">OpenAPI<span>{spec_n:,}</span></a>
+    <a class="rail-link" href="/mcp-apis/">MCP<span>{mcp_n:,}</span></a>
     <div class="rail-h rail-sec">Categories</div>
     {rail_cats}
-    <a class="rail-add" href="/add/">+ Add an API</a>
+    <a class="rail-link" href="/categories/" style="color:var(--dim)">All categories →</a>
   </aside>
   <div class="home-main">
-    <h1 class="home-h1">The terms of every public API — structured, sourced, re-verified.</h1>
-    <p class="home-sub">Auth, pricing, free tier, rate limits, OpenAPI spec &amp; MCP for {n:,} APIs,
-    with <b>an evidence URL on every verified claim</b>. <a href="/methodology/">How it's verified →</a></p>
-    <div class="statline">
-      <span><b>{n:,}</b> APIs documented</span>
-      <span><b>{free_pct}%</b> free tier</span>
-      <span><b>{mcp_pct}%</b> ship MCP</span>
-      <span><b>{rec_spec_pct}%</b> publish a spec</span>
+    <h1 class="home-h1" style="font-size:clamp(26px,3.2vw,36px);max-width:17em;margin-top:14px">Public API terms, tracked over time.</h1>
+    <p class="home-sub" style="font-size:15px;max-width:56ch">Authentication, pricing, free tiers, rate limits,
+    OpenAPI, and MCP for <b>{n:,} APIs</b>. Sourced from vendor documentation and checked for changes.</p>
+    <div class="cta-row" style="margin-bottom:0">
+      <a class="btn solid inline" href="#browse">Browse APIs</a>
+      <a class="linklike" href="/changes/" style="text-decoration:none">Recent changes →</a>
     </div>
+    <p class="statmini"><b>{n:,}</b> APIs · <b>{pages_monitored:,}</b> source pages · Last checked <b>{escape(last_check_h)}</b></p>
     <div class="catlist mobcats">{mob_cats}<a class="chip cat" href="/categories/">all →</a></div>
-    <div class="searchwrap">
-      <input class="search" id="q" type="search" placeholder="Search {n:,} APIs — name, domain, category, auth…" autocomplete="off">
-      <span class="kbd">⌘K</span>
-      <span class="chip fchip" data-f="free">free tier</span>
+    <div class="searchwrap" id="browse">
+      <input class="search" id="q" type="search" placeholder="Search {n:,} APIs…" autocomplete="off">
+      <span class="chip fchip" data-f="free">Free tier</span>
+      <span class="chip fchip" data-f="rl">Rate limits</span>
       <span class="chip fchip" data-f="mcp">MCP</span>
-      <span class="chip fchip" data-f="spec">OpenAPI</span>
-      <span class="chip fchip" data-f="hi">high confidence</span>
-      <span class="nshow"><b id="nshow">{n:,}</b> shown</span>
+      <button class="linklike" id="morebtn" type="button">More filters ▾</button>
+      <span class="chip fchip mf" data-f="noauth" hidden>No auth</span>
+      <span class="chip fchip mf" data-f="spec" hidden>OpenAPI</span>
+      <span class="chip fchip mf" data-f="hi" hidden>High confidence</span>
+      {chg_chip}
+      <span class="nshow" id="nshowwrap" hidden><b id="nshow">{n:,}</b> shown</span>
     </div>
-    <div class="table-wrap"><table>{TABLE_HEAD}<tbody>
-{table_rows(recs, base, logo_limit=100)}
-</tbody></table></div>
-    {ticker}
-    {feed_capture}
+    <div class="table-wrap"><table id="apitable" class="collapsed">{TABLE_HEAD}<tbody>
+{table_rows(recs_tbl, base, logo_limit=100, changed=changed_recent, xtra_after=12)}
+</tbody></table><button class="showall" id="showall" type="button">Show all {n:,} APIs ↓</button></div>
+    {sponsor_unit}
+    <div class="sect">
+      <h2>What the dataset shows</h2>
+      <div class="findrow">
+        <span><b>{free_pct}%</b> offer a free tier</span>
+        <span><b>{mcp_pct}%</b> document MCP</span>
+        <span><b>{rec_spec_pct}%</b> publish OpenAPI</span>
+      </div>
+      <p>Public APIs currently document MCP <b style="color:var(--ink)">{ratio}×</b> more often than
+      OpenAPI — recomputed from the corpus on every build. <a href="/report/">See all findings →</a></p>
+    </div>
+    {chg_panel}
+    <div class="sect why2col">
+      <div>
+        <div class="seclabel">Why API Terms</div>
+        <h2>What API directories leave out</h2>
+        <p>Most API directories tell you that an API exists. They rarely tell you how to
+        authenticate, what the free tier includes, where the rate limits are, or whether any
+        of those terms recently changed.</p>
+        <p>API Terms collects those details from vendor documentation and links every field
+        back to its source. We check those pages again over time and record what changed.
+        When a vendor does not publish something, we leave it blank.</p>
+        <p>It is useful when you are comparing APIs, running an integration in production,
+        or building agents that need to choose between tools.</p>
+      </div>
+      {fieldcard}
+    </div>
+    <div class="panel osscard">
+      <div class="seclabel">Open source</div>
+      <h2>Inspect the full pipeline</h2>
+      <p>The extractor, verifier, and change tracker are MIT-licensed. See how a record was
+      produced, contribute a source, or run it on your own collection.</p>
+      <div class="cta-row" style="margin:0">
+        <a class="btn inline" href="{GITHUB}" target="_blank" rel="noopener">View source code</a>
+        <a class="linklike" href="/methodology/" style="text-decoration:none">Read the methodology →</a>
+      </div>
+      <div class="oss-facts"><span>MIT licensed</span><span>Standard-library Python</span><span>Public change history</span></div>
+    </div>
   </div>
 </div>
 <script>
 var rows=[].slice.call(document.querySelectorAll("tbody tr")),
     q=document.getElementById("q"),
-    chips=[].slice.call(document.querySelectorAll(".fchip"));
+    chips=[].slice.call(document.querySelectorAll(".fchip")),
+    tbl=document.getElementById("apitable"),
+    showall=document.getElementById("showall");
+function expand(){{tbl.classList.remove("collapsed");if(showall)showall.style.display="none"}}
+if(showall)showall.addEventListener("click",expand);
 function apply(){{
   var s=q.value.toLowerCase().trim(),
       f=chips.filter(function(c){{return c.classList.contains("on")}}).map(function(c){{return c.dataset.f}}),
-      shown=0;
+      active=!!s||f.length>0, shown=0;
+  if(active)expand();
   rows.forEach(function(r){{
     var ok=(!s||(r.dataset.s||"").indexOf(s)>-1)&&f.every(function(k){{return r.dataset[k]==="1"}});
     r.style.display=ok?"":"none"; if(ok)shown++;
   }});
   document.getElementById("nshow").textContent=shown.toLocaleString();
+  document.getElementById("nshowwrap").hidden=!active;
 }}
 q.addEventListener("input",apply);
 chips.forEach(function(c){{c.addEventListener("click",function(){{c.classList.toggle("on");apply()}})}});
+var mb=document.getElementById("morebtn");
+if(mb)mb.addEventListener("click",function(){{
+  [].forEach.call(document.querySelectorAll(".fchip.mf"),function(c){{c.hidden=false}});
+  mb.style.display="none";
+}});
 document.addEventListener("keydown",function(e){{
   if((e.metaKey||e.ctrlKey)&&e.key==="k"){{e.preventDefault();q.focus()}}}});
 (function(){{
@@ -892,7 +1135,8 @@ def sponsors_page(n_recs, cats, base, sponsors):
         f'<td>{len(rs)} APIs</td><td>{slot(c)}</td></tr>'
         for c, rs in cats)
     if FORMSPREE_PROJECT:
-        sponsor_cta = f"""<form action="{form_action('sponsor')}" method="POST">
+        sponsor_cta = f"""<form action="{form_action('sponsor')}" method="POST"
+    data-ok="Thanks — received. We'll get back to you by email with rates and availability.">
     <input type="hidden" name="_subject" value="Sponsorship inquiry — apiterms.com">
     <input class="fld" type="email" name="email" placeholder="you@company.com" required>
     <textarea class="fld" name="message" style="margin-top:8px"
@@ -929,6 +1173,17 @@ visible at that moment:</p>
       table</b>, marked <b>FEATURED</b>.</span></li>
       <li><span class="ck">▸</span><span>The record itself stays identical — same fields,
       same evidence links, same confidence score.</span></li>
+    </ul>
+  </div>
+  <div class="panel card">
+    <h3>Who you reach</h3>
+    <ul>
+      <li><span class="ck">▸</span><span><b>Developers evaluating an API</b> — checking auth,
+      pricing and limits right before choosing one.</span></li>
+      <li><span class="ck">▸</span><span><b>Teams running APIs in production</b> — watching for
+      term changes before they break an integration or a budget.</span></li>
+      <li><span class="ck">▸</span><span><b>Data teams &amp; agent builders</b> — consuming the
+      dataset and change feed to decide what their agents call.</span></li>
     </ul>
   </div>
   <div class="panel card">
@@ -1004,7 +1259,8 @@ def correct_page(base):
 
 <div class="panel card" style="max-width:560px;margin-top:22px">
   <h3 id="form-hd">What&#39;s wrong (or yours)?</h3>
-  <form action="{form_action('correction')}" method="POST">
+  <form action="{form_action('correction')}" method="POST"
+   data-ok="Thanks — received. We re-verify against the vendor's own pages before changing any record, and we'll reply by email.">
     <input class="fld" type="text" name="domain" id="f-domain" placeholder="api domain, e.g. stripe.com" required>
     <select class="fld" name="kind" id="f-kind" style="margin-top:8px">
       <option value="correction">Correction — a field is wrong or outdated</option>
@@ -1112,7 +1368,9 @@ def report_page(recs, base):
 
     mcp, spec = cnt("mcp_server"), cnt("openapi_spec_url")
     mcp_pct, spec_pct = round(100 * mcp / n, 1), round(100 * spec / n, 1)
-    ratio = round(mcp / spec, 2) if spec else 0
+    # one decimal, same corpus + same criteria as the homepage band — the two surfaces
+    # must never show different ratios for the same finding
+    ratio = round(mcp / spec, 1) if spec else 0
     ver = [r for r in recs if r.get("confidence") in ("high", "medium")]
     nv = max(len(ver), 1)
     free_ver = round(100 * sum(1 for r in ver if v(r, "free_tier")) / nv)
@@ -1130,10 +1388,27 @@ def report_page(recs, base):
         ((round(100 * sum(1 for r in rs if v(r, "free_tier")) / len(rs)), c, len(rs))
          for c, rs in bycat.items() if len(rs) >= 15), reverse=True)
 
+    # llms.txt adoption: from the local classify output when present, else from the
+    # COMMITTED probe-stats snapshot (data/probe_stats.json) — CI builds don't have
+    # seed_classified.jsonl (gitignored pipeline state) and were publishing a false
+    # "0%" before this fallback existed (caught live 2026-07-17).
     cl_path = ROOT / "data" / "seed_classified.jsonl"
-    alive = [json.loads(l) for l in cl_path.open()] if cl_path.exists() else []
-    alive = [c for c in alive if c.get("alive")]
-    llms_pct = round(100 * sum(1 for c in alive if c.get("llms_txt")) / max(len(alive), 1))
+    ps_path = ROOT / "data" / "probe_stats.json"
+    if cl_path.exists():
+        alive = [c for c in (json.loads(l) for l in cl_path.open()) if c.get("alive")]
+        llms_pct = round(100 * sum(1 for c in alive if c.get("llms_txt")) / max(len(alive), 1))
+    elif ps_path.exists():
+        ps = json.loads(ps_path.read_text())
+        llms_pct = round(100 * ps["llms"] / max(ps["alive"], 1))
+    else:
+        llms_pct = None
+    if llms_pct is None:
+        llms_block = ""
+    else:
+        llms_block = f"""<h2 style="font-size:21px;margin:44px 0 8px">Most APIs are still hard for machines to discover</h2>
+<p>Across the live API domains we checked, only {llms_pct}% publish an <span class="mono">llms.txt</span>
+file and {spec_pct}% expose an OpenAPI spec URL. For most public APIs, an agent still has to read
+the same documentation pages a human would. That's the gap this census is trying to close.</p>"""
 
     def bar(label, pct, cls="b"):
         fillcol = ("linear-gradient(90deg,var(--blue),var(--bluehot))" if cls == "mcp"
@@ -1144,8 +1419,8 @@ def report_page(recs, base):
                 f'<div style="height:20px;background:var(--void);border:1px solid var(--line);position:relative">'
                 f'<div style="position:absolute;inset:0;width:{min(pct*2,100)}%;background:{fillcol}"></div></div></div>')
 
-    auth_bars = "".join(bar(k or "unknown", round(100 * c / at)) for k, c in auth.most_common(4))
-    price_bars = "".join(bar(k or "unknown", round(100 * c / pt)) for k, c in pm.most_common(4))
+    auth_bars = "".join(bar(hum(k) or "unknown", round(100 * c / at)) for k, c in auth.most_common(4))
+    price_bars = "".join(bar(hum(k) or "unknown", round(100 * c / pt)) for k, c in pm.most_common(4))
     cat_rows = "\n".join(
         f'<tr><td>{escape(c)}</td><td class="n">{ft}%</td>'
         f'<td><span style="display:inline-block;height:9px;background:var(--blue);'
@@ -1165,40 +1440,36 @@ def report_page(recs, base):
     }
     body = f"""
 <div class="crumbs"><a href="/">API Terms</a><span>/</span>Report</div>
-<div class="kicker">State of the API Economy · 2026</div>
-<h1 style="font-size:clamp(26px,4vw,38px);line-height:1.18;margin:0 0 16px;max-width:15em">
-Agents already won: more public APIs ship an MCP server than an OpenAPI spec.</h1>
-<p class="sub" style="font-size:18px;max-width:42em">We verified the access terms of
-<b style="color:var(--ink)">{n:,} public APIs</b> — auth, pricing, free tiers, rate limits,
-specs, MCP servers — reading each vendor's own docs and storing a source URL for every value.
-Here is what the machine-readable layer of the API economy actually looks like in mid-2026.</p>
+<div class="seclabel">State of the API economy · 2026</div>
+<h1 style="font-size:clamp(25px,3.6vw,36px);line-height:1.2;margin:0 0 16px;max-width:26em">
+Agents may have already won: more public APIs document MCP than publish OpenAPI.</h1>
+<p class="sub" style="font-size:17px;max-width:42em">We checked the access terms of {n:,} public
+APIs — authentication, pricing, free tiers, rate limits, specs, and MCP servers. Every value
+links back to the vendor's own documentation. Here's what the machine-readable side of the API
+economy looks like in mid-2026.</p>
 
-<div class="panel card tick" style="text-align:center;padding:30px 24px;margin:30px 0">
-  <div class="kicker" style="justify-content:center">The headline</div>
-  <div style="font-family:var(--mono);font-size:clamp(42px,8vw,72px);font-weight:700;
-       letter-spacing:-.03em;color:var(--ink);line-height:1"><span style="color:var(--bluehot)">{ratio}×</span></div>
-  <div style="font-family:var(--mono);font-size:13px;color:var(--dim);text-transform:uppercase;
-       letter-spacing:.05em;margin-top:8px">more ship a documented MCP server than expose an OpenAPI spec URL</div>
-  <div style="max-width:520px;margin:22px auto 0;text-align:left">
-    {bar("Ships a documented MCP server", mcp_pct, "mcp")}
-    {bar("Publishes an OpenAPI / Swagger spec URL", spec_pct, "spec")}
-  </div>
+<div class="panel card" style="padding:24px 28px;margin:30px 0;max-width:620px">
+  <p style="margin:0 0 18px;font-size:15px;color:var(--ink);line-height:1.5">Public APIs are now
+  <span class="mono" style="font-size:24px;color:var(--bluehot);padding:0 2px">{ratio}×</span>
+  more likely to document an MCP server than publish an OpenAPI spec.</p>
+  {bar("Documents an MCP server", mcp_pct, "mcp")}
+  {bar("Publishes an OpenAPI / Swagger spec URL", spec_pct, "spec")}
 </div>
 
-<p>This is the finding that reframes everything else. The incumbent open directory,
-<b>apis.guru, spent its life indexing OpenAPI specifications</b> — then froze in April 2023.
-But the OpenAPI spec turns out to be <b>the rarest machine-readable artifact in the entire
-corpus</b>: barely {spec_pct}% of public APIs expose one at a discoverable URL. Meanwhile MCP
-servers — the interface built for AI agents — already appear on {ratio}× as many. The tooling
-ecosystem is still organized around the spec. The APIs have moved on.</p>
+<p>{mcp_pct}% of the corpus documents an MCP server. Only {spec_pct}% publishes a discoverable
+OpenAPI or Swagger spec — which is surprising when you consider how much API tooling still
+revolves around OpenAPI. The best-known open directory, apis.guru, focused entirely on specs
+before it stopped updating in April 2023. But the spec is now the rarest machine-readable
+artifact we found. The tooling is still organized around specs; the APIs seem to be moving
+towards agents.</p>
 
-<h2 style="font-family:var(--mono);font-size:22px;margin:44px 0 8px">Free tiers are the default</h2>
-<p>Among the APIs whose terms we could fully verify, <b>{free_ver}% document a free tier</b> and
-<b>{rl_ver}% publish their rate limits</b>. Free access isn't a growth hack anymore — it's table
-stakes. But the distribution by category is where it gets interesting: the APIs <em>least</em>
-likely to document a usable free tier are the ostensibly "free" ones — government and open-data
-APIs, where terms are so under-documented that whether you can use them in production is often
-unstated.</p>
+<h2 style="font-size:21px;margin:44px 0 8px">Free tiers are normal now</h2>
+<p>Among the APIs where we could fully verify the terms, {free_ver}% offer some kind of free
+tier and {rl_ver}% publish their rate limits. Free access isn't unusual anymore — it's what
+developers expect.</p>
+<p>The strange part: government and open-data APIs are among the <em>least</em> likely to
+clearly document a usable free tier. The APIs may be free, but whether you can rely on them in
+production is often simply not stated.</p>
 
 <div class="table-wrap tick" style="margin:22px 0">
   <table>
@@ -1207,41 +1478,37 @@ unstated.</p>
   </table>
 </div>
 
-<h2 style="font-family:var(--mono);font-size:22px;margin:44px 0 8px">The auth surface is simpler than the tutorials suggest</h2>
-<p>Of the APIs that document authentication, the API key still rules — and a fifth need no auth
-at all. OAuth 2.0, the thing every integration guide dwells on, is the minority case. For anyone
-building an agent that calls arbitrary APIs, that's good news: the auth surface is mostly a single
-static credential.</p>
+<h2 style="font-size:21px;margin:44px 0 8px">Authentication is simpler than it looks</h2>
+<p>For APIs that document authentication, API keys still dominate — and almost one in five APIs
+needs no authentication at all. OAuth gets a lot of attention in integration guides, but it's
+still the minority case. For agents calling lots of different APIs, that's good news: most
+authentication comes down to a single static credential.</p>
 <div class="panel card" style="margin:20px 0">{auth_bars}</div>
 
-<h2 style="font-family:var(--mono);font-size:22px;margin:44px 0 8px">Pricing has consolidated</h2>
-<p>Freemium and genuinely-free account for most documented pricing. Pure pay-to-play is rare;
-even in the metered-inference era, usage-based billing is still the minority. The modern default
-is settled: a free bucket, then usage or seats.</p>
+<h2 style="font-size:21px;margin:44px 0 8px">Pricing has settled into a pattern</h2>
+<p>Most APIs are either freemium or completely free. Pure pay-to-play is relatively uncommon,
+and usage-based pricing is still a minority. The default model is pretty clear by now: give
+people a free bucket, then charge based on usage, users, or features.</p>
 <div class="panel card" style="margin:20px 0">{price_bars}</div>
 
-<h2 style="font-family:var(--mono);font-size:22px;margin:44px 0 8px">Only a quarter are machine-discoverable at all</h2>
-<p>Across every live API domain we probed, just <b>{llms_pct}% serve an <span class="mono">llms.txt</span></b>
-and {spec_pct}% an OpenAPI spec URL. For most public APIs, an agent's only route to the terms is
-reading the human docs page — which is exactly the gap this census exists to close.</p>
+{llms_block}
 
 <div class="panel card tick" style="margin:34px 0">
-  <h3 style="color:var(--bluehot)">// How we measured this — and what these numbers do and don't say</h3>
+  <h3 style="font-size:14px;font-weight:700;color:var(--ink);font-family:var(--sans);letter-spacing:0;text-transform:none">How we measured this — and what these numbers do and don't say</h3>
   <ul style="margin:8px 0 0;padding-left:0;list-style:none">
-    <li style="margin-bottom:9px"><span class="ck">▸</span> <b>Evidence or null.</b> Every value cites the
+    <li style="margin-bottom:9px"><span class="ck">▸</span> Every value cites the
     exact vendor page that states it; a deterministic check rejects any citation we didn't actually read.</li>
-    <li style="margin-bottom:9px"><span class="ck">▸</span> <b>These are documented rates — floors.</b>
+    <li style="margin-bottom:9px"><span class="ck">▸</span> These are documented rates — floors.
     A null means "not stated where we looked," not "doesn't exist." The MCP-vs-OpenAPI ratio compares two
     floors measured identically, so the {ratio}× holds regardless.</li>
-    <li style="margin-bottom:9px"><span class="ck">▸</span> <b>Caveats.</b> "Ships an MCP server" counts
+    <li style="margin-bottom:9px"><span class="ck">▸</span> "Documents an MCP server" counts
     documented references, not only live endpoints; the corpus is broad but not every public API on earth;
     multi-product vendors are one record per domain today.</li>
   </ul>
 </div>
 
 <div class="panel card tick" style="text-align:center;margin:40px 0 0;padding:28px">
-  <div class="kicker" style="justify-content:center;color:var(--add)">The dataset behind every number</div>
-  <h2 style="font-family:var(--mono);font-size:22px;margin:6px 0 10px">Read the source on any of these APIs.</h2>
+  <h2 style="font-size:20px;margin:6px 0 10px">Read the source on any of these APIs</h2>
   <p class="sub" style="max-width:44ch;margin:0 auto 18px">Every figure here is backed by {n:,} records
   with per-field evidence links, re-verified on a schedule.</p>
   <a class="btn solid" style="width:auto;display:inline-block;padding:12px 22px" href="/">Browse the census →</a>
@@ -1369,8 +1636,10 @@ the current limitations are.</p>
       URL of the exact page that states it. A record whose extraction cites a page we did
       not crawl is <b>rejected automatically</b> — fabricated sources cannot ship.</span></li>
       <li><span class="ck">▸</span><span><b>Polite crawling.</b> Honest user-agent, low request
-      rates, no circumvention. Sites that wall crawlers or render docs only in JavaScript
-      are tracked but not guessed at.</span></li>
+      rates. Public docs and pricing pages that plain HTTP can't read (JavaScript-rendered
+      or bot-manager defaults) are fetched through a standard rendering service
+      (Firecrawl) — public pages only, never logins or paywalls, capped per domain.
+      Values are still never guessed: no readable page, no record.</span></li>
     </ul>
   </div>
   <div class="panel card">
@@ -1455,10 +1724,20 @@ def main():
     for r in recs:
         r["_category"] = norm_category(r.get("category"))
     published = sorted(recs, key=lambda r: (-filled(r), r["domain"]))
+    lc = max((r.get("last_verified") or "" for r in recs), default="")
+    try:
+        import datetime
+        lc = datetime.date.fromisoformat(lc).strftime("%b %-d, %Y")
+    except Exception:
+        pass
+    STATS.update(n=len(published), last=lc)
     n_indexable = sum(1 for r in published if filled(r) >= INDEX_MIN_FIELDS)
 
-    # corpus stats from classify output (for the hero band)
+    # corpus stats from classify output; CI builds fall back to the COMMITTED probe
+    # snapshot (data/probe_stats.json) — without it the methodology funnel published
+    # tracked=1,418 / walled=0 on prod (caught live 2026-07-17).
     classified = ROOT / "data" / "seed_classified.jsonl"
+    probe_snap = ROOT / "data" / "probe_stats.json"
     tracked = llms = spec = 0
     if classified.exists():
         for line in classified.open():
@@ -1467,6 +1746,9 @@ def main():
             llms += bool(c.get("llms_txt"))
             spec += bool(c.get("spec_url") or c.get("openapi_probe"))
         total = sum(1 for _ in classified.open())
+    elif probe_snap.exists():
+        ps = json.loads(probe_snap.read_text())
+        total, tracked, llms, spec = ps["total"], ps["alive"], ps["llms"], ps["spec"]
     else:
         total = tracked = len(recs)
     corpus = {"tracked": tracked, "llms_pct": round(100 * llms / max(total, 1), 1),
@@ -1477,6 +1759,15 @@ def main():
     hist_by_domain = {}
     for e in changelog:
         hist_by_domain.setdefault(e["domain"], []).append(e)
+    import datetime
+    cutoff = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+    changed_recent = {e["domain"] for e in changelog if e.get("detected", "") >= cutoff}
+
+    # live-status line: how many source pages the tracker actually monitors
+    sig_path = ROOT / "data" / "page_signatures.json"
+    pages_monitored = 0
+    if sig_path.exists():
+        pages_monitored = sum(len(p) for p in json.loads(sig_path.read_text()).values())
 
     if DIST.exists():
         shutil.rmtree(DIST)
@@ -1531,6 +1822,20 @@ def main():
     (d / "index.html").write_text(html)
     urls.append(url)
 
+    # 404 (Netlify serves /404.html for any missing path). Not in the sitemap, noindexed.
+    body_404 = f"""
+<div style="padding:70px 0 30px;max-width:34em">
+  <div class="kicker">404</div>
+  <h1 style="font-size:28px;margin:0 0 10px">No record at this address.</h1>
+  <p class="sub">The page may have moved, or we may not cover that API yet.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+    <a class="btn solid" style="width:auto;display:inline-block;padding:11px 20px" href="/">Search the census</a>
+    <a class="btn" style="width:auto;display:inline-block;padding:11px 20px" href="/add/">+ Add the missing API</a>
+  </div>
+</div>"""
+    (DIST / "404.html").write_text(page("Page not found — API Terms",
+        "No record at this address.", f"{base}/404.html", body_404, base, noindex=True))
+
     # dataset landing page
     html, url = dataset_page(published, corpus, base)
     d = DIST / "dataset"
@@ -1583,7 +1888,9 @@ def main():
     (DIST / "changes.xml").write_text(changes_xml(changelog, base))
 
     # index
-    (DIST / "index.html").write_text(index_page(published, cats_sorted, base, corpus, changelog))
+    (DIST / "index.html").write_text(index_page(
+        published, cats_sorted, base, corpus, changelog, sponsors,
+        pages_monitored, changed_recent))
 
     # sample dataset (free funnel) = published records verbatim
     (DIST / "data").mkdir(exist_ok=True)
