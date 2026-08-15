@@ -94,7 +94,7 @@ FORMSPREE_PROJECT = CONFIG.get("formspree_project_id", "")
 # No booking link. There was a "Book a call →" button on /sponsors/ and /dataset/
 # pointing at cal.com/apiterms, which never existed and 404'd for every visitor who
 # clicked it (removed 2026-08-12). Sponsor and licensing contact goes through the
-# Formspree forms only — they deliver to Iron's inbox (see ../formspree.json). If a
+# Formspree forms only — they deliver to the maintainer's inbox (see ../formspree.json). If a
 # booking link is ever wanted, provision the account FIRST, then add it back here.
 
 # Homepage social proof. IMPORTANT: these are PLACEHOLDERS — obviously-fake
