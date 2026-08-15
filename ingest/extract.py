@@ -38,7 +38,11 @@ MAX_TEXT_PER_PAGE = 20_000  # chars of stripped text kept per page
 
 # ---------------------------------------------------------------- crawl phase
 
-CANDIDATE_PATHS = ["/", "/pricing", "/docs", "/api", "/rate-limits", "/developers"]
+# /llms.txt leads deliberately: it is the highest-signal file on the domain and the
+# only one whose links we follow. It was absent here, so the apex llms.txt was only
+# ever fetched when the seed carried an llms_txt hint from classify.py — and that
+# hint lives in gitignored state, so on CI it never arrived and the file was missed.
+CANDIDATE_PATHS = ["/llms.txt", "/", "/pricing", "/docs", "/api", "/rate-limits", "/developers"]
 # words that make a llms.txt-linked page worth fetching
 INTERESTING = re.compile(r"pric|rate.?limit|auth|quota|plan|getting.?started|api.?ref|limits", re.I)
 
@@ -72,7 +76,39 @@ def strip_html(body: str) -> str:
     return "\n".join(p.parts)[:MAX_TEXT_PER_PAGE]
 
 
+# robots.txt compliance (added 2026-08-14): every fetch — plain or rendered — first
+# checks the host's robots.txt. Disallowed URLs are treated exactly like unreachable
+# ones: marked, never fetched. Unfetchable robots.txt (no file / network error) means
+# allow, per common practice. Cached per host so the check costs one request per domain.
+import urllib.robotparser as _rp
+
+_ROBOTS_CACHE = {}
+
+
+def robots_allowed(url: str) -> bool:
+    host = urllib.parse.urlsplit(url).netloc
+    if not host:
+        return True
+    parser = _ROBOTS_CACHE.get(host)
+    if parser is None:
+        parser = _rp.RobotFileParser()
+        try:
+            req = urllib.request.Request(f"https://{host}/robots.txt",
+                                         headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                parser.parse(r.read(100_000).decode("utf-8", "replace").splitlines())
+        except Exception:
+            parser.allow_all = True   # no readable robots.txt -> allowed
+        _ROBOTS_CACHE[host] = parser
+    try:
+        return parser.can_fetch(UA, url)
+    except Exception:
+        return True
+
+
 def get(url: str, timeout=15):
+    if not robots_allowed(url):
+        return None, None, None
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -93,6 +129,8 @@ def firecrawl_get(url: str):
     bot-wall circumvention: we only call it for pages that already answered 200 but
     carried no server-side text. Disclosed on /methodology. Env-gated: without
     FIRECRAWL_API_KEY the crawler behaves exactly as before."""
+    if not robots_allowed(url):
+        return None
     body = json.dumps({"url": url, "formats": ["markdown"],
                        "onlyMainContent": True, "timeout": 30000}).encode()
     req = urllib.request.Request(
@@ -129,6 +167,13 @@ def crawl_domain(rec: dict) -> dict:
     urls = []
     if rec.get("llms_txt"):
         urls.append(rec["llms_txt"])
+    # Vendors overwhelmingly publish llms.txt on the docs subdomain, not the apex.
+    # We only ever probed https://{dom}/... here, so those files were invisible to
+    # the crawler even though classify.py already knew to check docs.{dom}. A probe
+    # of 200 thin records found 63 with a reachable llms.txt we had never fetched —
+    # the single highest-signal file we can read, and the one whose links we follow.
+    # These go FIRST: an llms.txt hit usually makes the apex guesses unnecessary.
+    urls += [f"https://{s}{dom}/llms.txt" for s in ("docs.", "developers.")]
     urls += [f"https://{dom}{p}" for p in CANDIDATE_PATHS]
 
     for url in urls:
@@ -334,32 +379,60 @@ def has_pages(domain: str) -> bool:
     return f.exists() and bool(json.loads(f.read_text()).get("pages"))
 
 
+def census_seed(rec: dict) -> dict:
+    """Build a fill seed from a record that is already in the census.
+
+    The freshness cycle refills domains onboarded in some earlier run, so
+    data/extract_queue.jsonl — gitignored local pipeline state — will not contain them
+    on CI, where it only holds the domains queued by this run. The census record carries
+    everything fill_domain reads, so seed from it rather than skipping the refill.
+
+    Deliberately omits spec_url: that hint exists to pass an external registry's claim
+    through to the extractor, and feeding our own previous extraction back in would bias
+    a re-verification toward re-confirming the value it is supposed to re-check."""
+    return {"domain": rec["domain"], "name": rec.get("name"),
+            "description": rec.get("what_it_does"), "category": rec.get("category")}
+
+
 def cmd_refill(domains: list):
     """Re-extract specific domains and REPLACE their census records in place.
-    Used by the gold-set audit and (later) the freshness layer-2 re-fill."""
-    queue = {json.loads(l)["domain"]: json.loads(l) for l in QUEUE.open()}
+    Used by the gold-set audit and by the freshness layer-2 re-fill."""
+    queue = ({json.loads(l)["domain"]: json.loads(l) for l in QUEUE.open()}
+             if QUEUE.exists() else {})
     recs = [json.loads(l) for l in CENSUS.open()] if CENSUS.exists() else []
     by_dom = {r["domain"]: i for i, r in enumerate(recs)}
     print(f"refilling {len(domains)} records with {MODEL} (replace in place)")
+    ok = skipped = failed = 0
     for dom in domains:
-        if dom not in queue:
-            print(f"  {dom}: not in extract queue, skipped")
+        seed = queue.get(dom)
+        if seed is None and dom in by_dom:
+            seed = census_seed(recs[by_dom[dom]])
+        if seed is None:
+            print(f"  {dom}: in neither the extract queue nor the census, skipped")
+            skipped += 1
             continue
         if not has_pages(dom):
             print(f"  {dom}: no crawled pages, skipped")
+            skipped += 1
             continue
         try:
-            out = fill_domain(queue[dom])
+            out = fill_domain(seed)
             if dom in by_dom:
                 recs[by_dom[dom]] = out
             else:
                 recs.append(out)
             print(f"  {dom}: ok ({out['confidence']})")
+            ok += 1
         except Exception as e:
             print(f"  {dom}: FAILED — {e}")
+            failed += 1
     with CENSUS.open("w") as f:
         for r in recs:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    # Always print the tally: a refill that silently refills NOTHING is exactly how the
+    # weekly re-verification broke (every domain hit the "not in extract queue" skip for
+    # four cycles while the workflow stayed green). Make that visible in the CI log.
+    print(f"refill summary: {ok} refilled, {skipped} skipped, {failed} failed")
 
 
 def cmd_fill(n: int):

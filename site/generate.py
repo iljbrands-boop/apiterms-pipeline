@@ -73,7 +73,12 @@ def load_sponsors():
     else:
         s = {}
     return {"categories": s.get("categories", {}), "featured": set(s.get("featured", [])),
-            "main": s.get("main")}  # main partner: {"name","url","tagline"} — homepage slot
+            "main": s.get("main"),   # main partner: {"name","url","tagline"} — homepage slot
+            # Published rates. Edit sponsors.json, never this file — the whole point
+            # of keeping them in data is that changing a price is not a code change.
+            # Omit the "rates" key entirely and the pricing card renders nothing,
+            # which is the correct behaviour when we don't want to quote publicly.
+            "rates": s.get("rates")}
 
 
 # site/config.json: third-party service IDs. Empty string = feature not injected.
@@ -86,10 +91,11 @@ CONFIG = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
 CRISP_ID = CONFIG.get("crisp_website_id", "")
 FORMSPREE_PROJECT = CONFIG.get("formspree_project_id", "")
 
-# Booking link for licensing / sponsor / partnership conversations. Swap in your
-# real Cal.com URL. Surfaced in the footer and on /dataset/ + /sponsors/ only —
-# where a human conversation actually makes sense — never on record pages.
-CAL_LINK = "https://cal.com/apiterms"
+# No booking link. There was a "Book a call →" button on /sponsors/ and /dataset/
+# pointing at cal.com/apiterms, which never existed and 404'd for every visitor who
+# clicked it (removed 2026-08-12). Sponsor and licensing contact goes through the
+# Formspree forms only — they deliver to Iron's inbox (see ../formspree.json). If a
+# booking link is ever wanted, provision the account FIRST, then add it back here.
 
 # Homepage social proof. IMPORTANT: these are PLACEHOLDERS — obviously-fake
 # names/companies so nothing here can be mistaken for a real endorsement. The trust
@@ -511,7 +517,7 @@ def page(title, desc, canonical, body_html, base, jsonld=None, noindex=False):
   <div class="fc-r"><a href="/#browse">Browse</a> · <a href="/changes/">Changes</a> · <a href="/report/">Findings</a> · <a href="/dataset/">Dataset</a> · <a href="/methodology/">Methodology</a><br>
   <a href="{GITHUB}" target="_blank" rel="noopener">Open source</a> · <a href="/add/">Add an API</a> · <a href="/correct/">Report an error</a> · <a href="/sponsors/">Sponsor</a></div>
 </div>
-<div class="foot-meta">{STATS['n']:,} APIs tracked · Last full check {STATS['last']} · <a href="/llms.txt">llms.txt</a></div>
+<div class="foot-meta">{STATS['n']:,} APIs tracked · Source pages swept {STATS['last']} · records re-extracted when their terms change · <a href="/llms.txt">llms.txt</a></div>
 </footer>
 </div>
 <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
@@ -561,34 +567,82 @@ def display_name(rec):
     return n if n.lower().endswith("api") else n + " API"
 
 
+def clip_value(text, limit):
+    """Shorten a field value to snippet size without cutting mid-word or leaving
+    dangling punctuation. Vendor values are often "600 req/min per token,
+    increasable on request" — the first clause carries the number, which is the
+    part a searcher is scanning for, so prefer it over a truncated full value."""
+    t = " ".join(str(text).split())
+    for sep in ("; ", " — ", ". ", ", "):
+        head = t.split(sep)[0]
+        if sep in t and 12 <= len(head):
+            t = head
+            break
+    if len(t) > limit:
+        t = t[:limit].rsplit(" ", 1)[0]
+    if t.count("(") > t.count(")"):          # never leave an unclosed bracket
+        t = t.split("(")[0]
+    return t.strip().rstrip(",;:—- ")
+
+
 def meta_desc(rec):
     """Complete sentence from the strongest available facts; never mid-word truncation.
-    Only mentions fields the record actually has."""
+    Only mentions fields the record actually has.
+
+    States the VALUES, not their existence. This used to say "a free tier and
+    documented rate limits", which announces that we hold the fact rather than
+    giving it — so a searcher on "notion api rate limit free tier" saw a page that
+    promised the number without showing it. Those pages sat at position 5-10 with a
+    0.50% CTR against a 3-5% norm (GSC, 33 days from 2026-07-11). The numbers ARE
+    the product; put them in the snippet.
+
+    Ordering matters too: the old version appended rate limits LAST and dropped
+    from the end to fit, so the single most-searched fact was the first to go.
+    Concrete values now lead and presence-only flags trail.
+    """
     name = display_name(rec)
     facts = []
-    if v(rec, "auth_type"):
-        facts.append(f"{v(rec, 'auth_type').replace('_', ' ')} auth")
+    if v(rec, "free_tier"):
+        facts.append(f"free tier: {clip_value(v(rec, 'free_tier'), 58)}")
+    if v(rec, "rate_limits"):
+        facts.append(f"rate limits: {clip_value(v(rec, 'rate_limits'), 58)}")
     if v(rec, "pricing_model"):
         facts.append(f"{v(rec, 'pricing_model').replace('_', ' ')} pricing")
-    if v(rec, "free_tier"):
-        facts.append("a free tier")
-    if v(rec, "rate_limits"):
-        facts.append("documented rate limits")
+    if v(rec, "auth_type"):
+        facts.append(f"{v(rec, 'auth_type').replace('_', ' ')} auth")
     if v(rec, "openapi_spec_url"):
-        facts.append("an OpenAPI spec")
+        facts.append("OpenAPI spec")
     if v(rec, "mcp_server"):
-        facts.append("an MCP server")
-    tail = f" Verified {rec.get('last_verified')} with vendor source links."
+        facts.append("MCP server")
+    # Compact tail: every character it costs is a character not spent on a number.
+    tail = f" Verified {rec.get('last_verified')}, source-linked."
     if not facts:
-        return (f"{name}: the vendor documents none of the terms we track — "
-                f"checked against its own pages.{tail}")
-    while facts:
-        listing = facts[0] if len(facts) == 1 else ", ".join(facts[:-1]) + " and " + facts[-1]
-        d = f"{name} terms: {listing}.{tail}"
-        if len(d) <= 158:
-            return d
-        facts = facts[:-1]
-    return f"{name}: structured, source-linked API terms.{tail}"
+        # Length-guarded like every other path: this branch used to be returned
+        # unchecked, so the 616 zero-field records with a long display name (e.g.
+        # "UserCheck (formerly MailCheck.ai) API") overflowed 158 chars and got
+        # cut mid-word by the search engine instead of by us.
+        d = f"{name}: the vendor documents none of the terms we track.{tail}"
+        return d if len(d) <= 158 else f"{name}: terms not documented by the vendor.{tail}"[:158]
+
+    # Pack greedily rather than dropping from the end. Dropping meant one long
+    # rate-limit value evicted the short pricing and auth facts behind it, leaving
+    # descriptions at half the available width; and a single over-long fact could
+    # not be shed at all, so 37 records still overflowed 158 chars.
+    def assemble(items):
+        return f"{name}: " + "; ".join(items) + f".{tail}"
+
+    chosen = []
+    for f in facts:
+        if len(assemble(chosen + [f])) <= 158:
+            chosen.append(f)
+    if not chosen:
+        # not even the strongest fact fits — clip it to whatever room is left
+        room = 158 - len(assemble([""]))
+        if room >= 20:
+            chosen = [clip_value(facts[0], room)]
+        else:
+            return f"{name}: structured, source-linked API terms.{tail}"[:158]
+    return assemble(chosen)
 
 
 def record_page(rec, base, history=None):
@@ -867,7 +921,7 @@ def index_page(recs, cats, base, corpus_stats, changelog=None, sponsors=None,
       <div class="fc-h">Every field includes</div>
       <div class="fc-r"><span class="k">Value</span><span class="v">{escape(hum(v(ex, "pricing_model")))}</span></div>
       <div class="fc-r"><span class="k">Source</span><span class="v"><a href="{escape(src)}" rel="nofollow">{escape(src_disp)} ↗</a></span></div>
-      <div class="fc-r"><span class="k">Last checked</span><span class="v">{escape(ex.get("last_verified") or "")}</span></div>
+      <div class="fc-r"><span class="k">Last verified</span><span class="v">{escape(ex.get("last_verified") or "")}</span></div>
       <div class="fc-r"><span class="k">History</span><span class="v">{escape(hist_txt)}</span></div>
       <p style="margin:10px 0 0;font-size:11.5px;color:var(--dim)">The live pricing field of
       <a href="/api/{escape(ex["domain"])}/">{escape(ex.get("name") or ex["domain"])}</a> — not a mock-up.</p>
@@ -897,7 +951,7 @@ def index_page(recs, cats, base, corpus_stats, changelog=None, sponsors=None,
       <a class="btn solid inline" href="#browse">Browse APIs</a>
       <a class="linklike" href="/changes/" style="text-decoration:none">Recent changes →</a>
     </div>
-    <p class="statmini"><b>{n:,}</b> APIs · <b>{pages_monitored:,}</b> source pages · Last checked <b>{escape(last_check_h)}</b></p>
+    <p class="statmini"><b>{n:,}</b> APIs · <b>{pages_monitored:,}</b> source pages · Last source sweep <b>{escape(last_check_h)}</b></p>
     <div class="catlist mobcats">{mob_cats}<a class="chip cat" href="/categories/">all →</a></div>
     <div class="searchwrap" id="browse">
       <input class="search" id="q" type="search" placeholder="Search {n:,} APIs…" autocomplete="off">
@@ -1070,7 +1124,6 @@ the change feed (what changed, when, with proof), history, and commercial licens
       <a href="/methodology/">methodology</a>.</span></li>
     </ul>
     <a class="btn" href="/correct/">License the data / change feed</a>
-    <a class="btn" style="margin-top:8px" href="{CAL_LINK}" target="_blank" rel="noopener">Book a call →</a>
   </div>
 </aside>
 </div>"""
@@ -1135,19 +1188,45 @@ def sponsors_page(n_recs, cats, base, sponsors):
         f'<td>{len(rs)} APIs</td><td>{slot(c)}</td></tr>'
         for c, rs in cats)
     if FORMSPREE_PROJECT:
+        # Copy note: rates are published above, so the button and the confirmation
+        # must not promise to email a price the visitor can already read — they
+        # promise availability and the traffic figures we deliberately don't publish.
         sponsor_cta = f"""<form action="{form_action('sponsor')}" method="POST"
-    data-ok="Thanks — received. We'll get back to you by email with rates and availability.">
+    data-ok="Thanks — received. We'll come back by email with availability and current traffic figures.">
     <input type="hidden" name="_subject" value="Sponsorship inquiry — apiterms.com">
     <input class="fld" type="email" name="email" placeholder="you@company.com" required>
     <textarea class="fld" name="message" style="margin-top:8px"
      placeholder="Which category / featured listing are you interested in?"></textarea>
-    <button class="btn solid" type="submit" style="margin-top:8px">Ask for rates</button>
-    <a class="btn" style="margin-top:8px" href="{CAL_LINK}" target="_blank" rel="noopener">Or book a call →</a>
+    <button class="btn solid" type="submit" style="margin-top:8px">Enquire about a slot</button>
     </form>"""
     else:
-        sponsor_cta = (f'<a class="btn" href="/correct/">Contact us</a>'
-                       f'<a class="btn" style="margin-top:8px" href="{CAL_LINK}" '
-                       f'target="_blank" rel="noopener">Book a call →</a>')  # no email on site
+        sponsor_cta = '<a class="btn" href="/correct/">Contact us</a>'  # no email on site
+
+    # Published rates. Every figure comes from sponsors.json — nothing is hardcoded
+    # here, and an absent "rates" key renders nothing rather than a placeholder price.
+    # Copy rule: only claims that are true right now. We publish corpus
+    # numbers, which are computed at build time and verifiable on the site itself;
+    # we do NOT publish traffic figures, because the site is young and an unverified
+    # audience number on a page whose whole product is verified claims is a
+    # self-inflicted wound. Point buyers at analytics on request instead.
+    rates = sponsors.get("rates")
+    rate_card = ""
+    if rates and rates.get("items"):
+        rows = "\n".join(
+            f'<tr><td class="name">{escape(i["name"])}</td>'
+            f'<td class="mono">{escape(i["price"])}</td>'
+            f'<td>{escape(i.get("unit", ""))}</td></tr>'
+            for i in rates["items"])
+        note = (f'<p class="sub" style="margin:10px 0 0;font-size:13px">'
+                f'{escape(rates["note"])}</p>' if rates.get("note") else "")
+        rate_card = f"""<div class="panel card">
+    <h3>Rates</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Placement</th><th>Price</th><th></th></tr></thead>
+      <tbody>{rows}</tbody></table></div>
+    {note}
+  </div>"""
+
     body = f"""
 <div class="crumbs"><a href="/">API Terms</a><span>/</span>Sponsors</div>
 <div class="kicker">Sponsors</div>
@@ -1186,6 +1265,7 @@ visible at that moment:</p>
       dataset and change feed to decide what their agents call.</span></li>
     </ul>
   </div>
+  {rate_card}
   <div class="panel card">
     <h3>What sponsorship never buys</h3>
     <ul>
@@ -1407,8 +1487,8 @@ def report_page(recs, base):
     else:
         llms_block = f"""<h2 style="font-size:21px;margin:44px 0 8px">Most APIs are still hard for machines to discover</h2>
 <p>Across the live API domains we checked, only {llms_pct}% publish an <span class="mono">llms.txt</span>
-file and {spec_pct}% expose an OpenAPI spec URL. For most public APIs, an agent still has to read
-the same documentation pages a human would. That's the gap this census is trying to close.</p>"""
+file. For most public APIs, an agent still has to read the same documentation pages a human
+would. That's the gap this census is trying to close.</p>"""
 
     def bar(label, pct, cls="b"):
         fillcol = ("linear-gradient(90deg,var(--blue),var(--bluehot))" if cls == "mcp"
@@ -1428,9 +1508,13 @@ the same documentation pages a human would. That's the gap this census is trying
         for ft, c, _ in catrows)
 
     title = "The State of the API Economy 2026 — API Terms"
-    desc = (f"We verified the access terms of {n:,} public APIs. The finding: {ratio}x more "
-            f"ship an MCP server ({mcp_pct}%) than publish an OpenAPI spec ({spec_pct}%). "
-            "Free-tier rates, auth and pricing distributions — every figure source-linked.")
+    rl_pct = round(100 * sum(1 for r in recs if v(r, "rate_limits")) / n)
+    authd_pct = round(100 * sum(1 for r in recs if v(r, "auth_type")) / n)
+    freed_pct = round(100 * sum(1 for r in recs if v(r, "free_tier")) / n)
+    pmd_pct = round(100 * sum(1 for r in recs if v(r, "pricing_model")) / n)
+    desc = (f"We verified the access terms of {n:,} public APIs. Only {rl_pct}% document their "
+            f"rate limits, {authd_pct}% their authentication, {freed_pct}% a free tier. "
+            "Every figure source-linked.")
     jsonld = {
         "@context": "https://schema.org", "@type": "Report",
         "name": "The State of the API Economy 2026", "url": url,
@@ -1442,26 +1526,32 @@ the same documentation pages a human would. That's the gap this census is trying
 <div class="crumbs"><a href="/">API Terms</a><span>/</span>Report</div>
 <div class="seclabel">State of the API economy · 2026</div>
 <h1 style="font-size:clamp(25px,3.6vw,36px);line-height:1.2;margin:0 0 16px;max-width:26em">
-Agents may have already won: more public APIs document MCP than publish OpenAPI.</h1>
+The terms that decide whether you can use an API are barely documented.</h1>
 <p class="sub" style="font-size:17px;max-width:42em">We checked the access terms of {n:,} public
 APIs — authentication, pricing, free tiers, rate limits, specs, and MCP servers. Every value
 links back to the vendor's own documentation. Here's what the machine-readable side of the API
 economy looks like in mid-2026.</p>
 
 <div class="panel card" style="padding:24px 28px;margin:30px 0;max-width:620px">
-  <p style="margin:0 0 18px;font-size:15px;color:var(--ink);line-height:1.5">Public APIs are now
-  <span class="mono" style="font-size:24px;color:var(--bluehot);padding:0 2px">{ratio}×</span>
-  more likely to document an MCP server than publish an OpenAPI spec.</p>
-  {bar("Documents an MCP server", mcp_pct, "mcp")}
-  {bar("Publishes an OpenAPI / Swagger spec URL", spec_pct, "spec")}
+  <p style="margin:0 0 18px;font-size:15px;color:var(--ink);line-height:1.5">Fewer than
+  <span class="mono" style="font-size:24px;color:var(--bluehot);padding:0 2px">1 in 4</span>
+  public APIs document their rate limits — the number an integration hits first.</p>
+  {bar("Documents rate limits", rl_pct)}
+  {bar("Documents authentication", authd_pct)}
+  {bar("Documents a free tier", freed_pct)}
+  {bar("Documents a pricing model", pmd_pct)}
 </div>
 
-<p>{mcp_pct}% of the corpus documents an MCP server. Only {spec_pct}% publishes a discoverable
-OpenAPI or Swagger spec — which is surprising when you consider how much API tooling still
-revolves around OpenAPI. The best-known open directory, apis.guru, focused entirely on specs
-before it stopped updating in April 2023. But the spec is now the rarest machine-readable
-artifact we found. The tooling is still organized around specs; the APIs seem to be moving
-towards agents.</p>
+<p>These are the questions every integration starts with — how do I auth, what does it cost,
+what's free, where are the limits — and for most public APIs the vendor's own pages answer
+only some of them. That documentation gap is the reason this census exists: we record what is
+stated, link the page that states it, and publish an honest <span class="mono">null</span>
+for the rest.</p>
+
+<p style="font-size:13.5px;color:var(--dim)">A note on a retired claim: an earlier version of
+this report led with an MCP-vs-OpenAPI ratio. We pulled it — a direct probe of live domains
+finds far more OpenAPI specs than our extraction captured, so the two numbers were not
+comparable floors. When our own data can't support a claim, the claim goes.</p>
 
 <h2 style="font-size:21px;margin:44px 0 8px">Free tiers are normal now</h2>
 <p>Among the APIs where we could fully verify the terms, {free_ver}% offer some kind of free
@@ -1499,8 +1589,7 @@ people a free bucket, then charge based on usage, users, or features.</p>
     <li style="margin-bottom:9px"><span class="ck">▸</span> Every value cites the
     exact vendor page that states it; a deterministic check rejects any citation we didn't actually read.</li>
     <li style="margin-bottom:9px"><span class="ck">▸</span> These are documented rates — floors.
-    A null means "not stated where we looked," not "doesn't exist." The MCP-vs-OpenAPI ratio compares two
-    floors measured identically, so the {ratio}× holds regardless.</li>
+    A null means "not stated where we looked," not "doesn't exist."</li>
     <li style="margin-bottom:9px"><span class="ck">▸</span> "Documents an MCP server" counts
     documented references, not only live endpoints; the corpus is broad but not every public API on earth;
     multi-product vendors are one record per domain today.</li>
@@ -1636,7 +1725,8 @@ the current limitations are.</p>
       URL of the exact page that states it. A record whose extraction cites a page we did
       not crawl is <b>rejected automatically</b> — fabricated sources cannot ship.</span></li>
       <li><span class="ck">▸</span><span><b>Polite crawling.</b> Honest user-agent, low request
-      rates. Public docs and pricing pages that plain HTTP can't read (JavaScript-rendered
+      rates, and robots.txt respected — pages a site disallows are treated as unavailable
+      and marked, never fetched. Public docs and pricing pages that plain HTTP can't read (JavaScript-rendered
       or bot-manager defaults) are fetched through a standard rendering service
       (Firecrawl) — public pages only, never logins or paywalls, capped per domain.
       Values are still never guessed: no readable page, no record.</span></li>

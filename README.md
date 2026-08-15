@@ -16,9 +16,10 @@ A one-time scrape of that data would rot the same way. The value isn't the snaps
 it's the loop: re-fetch, detect real changes, re-extract, diff, publish. That loop is
 what this repo contains.
 
-> **One finding from the full corpus:** more public APIs now ship a **documented MCP server**
-> than expose an **OpenAPI spec URL** — **2.4× as many** (17% vs 7%). The tooling
-> ecosystem is still organized around the spec; the APIs have moved to the agent interface.
+> **A claim we retired (2026-08-14):** earlier versions here led with an MCP-vs-OpenAPI
+> ratio. A direct probe of live domains finds far more OpenAPI specs than our extraction
+> captured, so the two floors were not comparable and the claim is withdrawn. The
+> defensible finding stands: fewer than 1 in 4 public APIs document their rate limits.
 
 ## The tracking loop
 
